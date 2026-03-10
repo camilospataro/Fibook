@@ -1,6 +1,4 @@
-import { useState } from 'react';
-import { DollarSign, TrendingDown, CreditCard, PiggyBank, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { DollarSign, TrendingDown, CreditCard, PiggyBank } from 'lucide-react';
 import KpiCard from '@/components/cards/KpiCard';
 import DebtPayoffChart from '@/components/charts/DebtPayoffChart';
 import SavingsProjectionChart from '@/components/charts/SavingsProjectionChart';
@@ -9,12 +7,10 @@ import SubscriptionsSummary from '@/components/cards/SubscriptionsSummary';
 import SavingsProgress from '@/components/cards/SavingsProgress';
 import AiInsights from '@/components/cards/AiInsights';
 import ExpensesBreakdown from '@/components/cards/ExpensesBreakdown';
-import AiUpdateSheet from '@/components/modals/AiUpdateSheet';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { totalDebtCOP, totalMonthlyIncome, totalMonthlyExpenses } from '@/lib/calculations';
 
 export default function Dashboard() {
-  const [aiUpdateOpen, setAiUpdateOpen] = useState(false);
   const accounts = useFinanceStore(s => s.debtAccounts);
   const incomeSources = useFinanceStore(s => s.incomeSources);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
@@ -27,17 +23,7 @@ export default function Dashboard() {
   const balance = income - expenses;
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Dashboard</h1>
-        <Button
-          size="sm"
-          onClick={() => setAiUpdateOpen(true)}
-          className="gap-1.5"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span className="hidden sm:inline">AI Update</span>
-        </Button>
-      </div>
+      <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Dashboard</h1>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -66,7 +52,6 @@ export default function Dashboard() {
         <SavingsProgress />
       </div>
 
-      <AiUpdateSheet open={aiUpdateOpen} onOpenChange={setAiUpdateOpen} />
     </div>
   );
 }

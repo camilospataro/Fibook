@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, PiggyBank } from 'lucide-react';
+import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, PiggyBank, Sparkles } from 'lucide-react';
+import AiUpdateSheet from '@/components/modals/AiUpdateSheet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ export default function Monthly() {
   const updateIncomeSource = useFinanceStore(s => s.updateIncomeSource);
   const updateSavingsTarget = useFinanceStore(s => s.updateSavingsTarget);
 
+  const [aiUpdateOpen, setAiUpdateOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth);
   const currentMonth = selectedMonth;
 
@@ -230,7 +232,17 @@ export default function Monthly() {
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-3xl mx-auto pb-28 md:pb-6">
       <div>
-        <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Monthly Update</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Monthly Update</h1>
+          <Button
+            size="sm"
+            onClick={() => setAiUpdateOpen(true)}
+            className="gap-1.5"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span className="hidden sm:inline">AI Update</span>
+          </Button>
+        </div>
         <div className="flex items-center gap-3 mt-1">
           <button onClick={() => shiftMonth(-1)} className="text-muted-foreground hover:text-foreground transition-colors">
             <ChevronLeft className="w-5 h-5" />
@@ -636,6 +648,8 @@ export default function Monthly() {
           <Button onClick={() => setShowRecap(false)} className="w-full mt-4">Done</Button>
         </DialogContent>
       </Dialog>
+
+      <AiUpdateSheet open={aiUpdateOpen} onOpenChange={setAiUpdateOpen} />
     </div>
   );
 }
