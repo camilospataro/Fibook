@@ -21,10 +21,10 @@ export default function KpiCard({ title, value, prefix = '', suffix = '', icon: 
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{title}</p>
           <Icon className="w-4 h-4" style={{ color }} />
         </div>
-        <p className="text-2xl font-bold font-[family-name:var(--font-display)]" style={{ color }}>
+        <p className="text-lg sm:text-2xl font-bold font-[family-name:var(--font-display)]" style={{ color }}>
           {prefix}
           <CountUp end={value} duration={1.2} separator={separator} decimals={decimals} />
-          {suffix}
+          {suffix && <span className="text-xs font-normal text-muted-foreground">{suffix}</span>}
         </p>
       </CardContent>
     </Card>

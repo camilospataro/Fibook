@@ -16,12 +16,18 @@ export function totalSubscriptionsCOP(subs: Subscription[], exchangeRate: number
     }, 0);
 }
 
-export function totalMonthlyIncome(sources: IncomeSource[]): number {
-  return sources.reduce((sum, s) => sum + s.amount, 0);
+export function totalMonthlyIncome(sources: IncomeSource[], exchangeRate: number): number {
+  return sources.reduce((sum, s) => {
+    const amount = s.currency === 'USD' ? s.amount * exchangeRate : s.amount;
+    return sum + amount;
+  }, 0);
 }
 
-export function totalFixedExpenses(expenses: FixedExpense[]): number {
-  return expenses.reduce((sum, e) => sum + e.amount, 0);
+export function totalFixedExpenses(expenses: FixedExpense[], exchangeRate: number): number {
+  return expenses.reduce((sum, e) => {
+    const amount = e.currency === 'USD' ? e.amount * exchangeRate : e.amount;
+    return sum + amount;
+  }, 0);
 }
 
 export function totalMinimumPaymentsCOP(accounts: DebtAccount[], exchangeRate: number): number {
@@ -38,7 +44,7 @@ export function totalMonthlyExpenses(
   exchangeRate: number
 ): number {
   return (
-    totalFixedExpenses(fixedExpenses) +
+    totalFixedExpenses(fixedExpenses, exchangeRate) +
     totalMinimumPaymentsCOP(accounts, exchangeRate) +
     totalSubscriptionsCOP(subs, exchangeRate)
   );

@@ -37,7 +37,7 @@ export default function AiInsights() {
         balance: a.currentBalance,
         minimumPayment: a.minimumMonthlyPayment,
       })),
-      monthlyIncome: totalMonthlyIncome(incomeSources),
+      monthlyIncome: totalMonthlyIncome(incomeSources, exchangeRate),
       monthlyExpenses: totalMonthlyExpenses(fixedExpenses, accounts, subs, exchangeRate),
       subscriptionsCost: totalSubscriptionsCOP(subs, exchangeRate),
       activeSubscriptions: subs.filter(s => s.active).length,
@@ -56,25 +56,14 @@ export default function AiInsights() {
     };
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-insights`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ financialData }),
-        }
-      );
+      const { data, error: fnError } = await supabase.functions.invoke('ai-insights', {
+        body: { financialData },
+      });
 
-      const result = await res.json();
-
-      if (!res.ok) {
-        setError(result.error ?? 'Failed to get insights');
+      if (fnError) {
+        setError(fnError.message || 'Failed to get insights');
       } else {
-        setInsights(result.insights);
+        setInsights(data.insights);
       }
     } catch {
       setError('Could not connect to AI service');

@@ -2,6 +2,8 @@ export interface Settings {
   id: string;
   userId: string;
   exchangeRate: number;
+  exchangeRateUpdatedAt: string | null;
+  savingsTarget: number;
 }
 
 export interface DebtAccount {
@@ -11,6 +13,7 @@ export interface DebtAccount {
   currency: 'COP' | 'USD';
   currentBalance: number;
   minimumMonthlyPayment: number;
+  monthlyPayment: number;
   color: string;
 }
 
@@ -19,6 +22,7 @@ export interface IncomeSource {
   userId: string;
   name: string;
   amount: number;
+  currency: 'COP' | 'USD';
   isRecurring: boolean;
 }
 
@@ -27,6 +31,7 @@ export interface FixedExpense {
   userId: string;
   name: string;
   amount: number;
+  currency: 'COP' | 'USD';
   category: 'housing' | 'food' | 'transport' | 'entertainment' | 'health' | 'other';
 }
 
@@ -36,6 +41,7 @@ export interface Subscription {
   name: string;
   currency: 'COP' | 'USD';
   amount: number;
+  group: string;
   active: boolean;
 }
 

@@ -1,31 +1,25 @@
 const copFormatter = new Intl.NumberFormat('es-CO', {
-  style: 'currency',
-  currency: 'COP',
+  style: 'decimal',
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 });
 
 const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
+  style: 'decimal',
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 });
 
 export function formatCOP(amount: number): string {
-  return copFormatter.format(amount);
+  return `$${copFormatter.format(amount)} COP`;
 }
 
 export function formatUSD(amount: number): string {
-  return usdFormatter.format(amount);
+  return `$${usdFormatter.format(amount)} USD`;
 }
 
 export function formatCurrency(amount: number, currency: 'COP' | 'USD'): string {
   return currency === 'USD' ? formatUSD(amount) : formatCOP(amount);
-}
-
-export function formatNumber(amount: number): string {
-  return new Intl.NumberFormat('es-CO').format(amount);
 }
 
 export function getCurrentMonth(): string {

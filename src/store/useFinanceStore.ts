@@ -20,6 +20,7 @@ interface FinanceState {
   // Settings
   updateExchangeRate: (rate: number) => Promise<void>;
   refreshExchangeRate: () => Promise<void>;
+  updateSavingsTarget: (amount: number) => Promise<void>;
 
   // Debt accounts
   addDebtAccount: (account: Omit<DebtAccount, 'id' | 'userId'>) => Promise<void>;
@@ -43,6 +44,7 @@ interface FinanceState {
 
   // Spending
   addSpending: (entry: Omit<SpendingEntry, 'id' | 'userId'>) => Promise<void>;
+  updateSpending: (id: string, updates: Partial<SpendingEntry>) => Promise<void>;
   deleteSpending: (id: string) => Promise<void>;
 
   // Snapshots
@@ -50,35 +52,40 @@ interface FinanceState {
 }
 
 function mapSettings(row: Record<string, unknown>): Settings {
-  return { id: row.id as string, userId: row.user_id as string, exchangeRate: row.exchange_rate as number };
+  return { id: row.id as string, userId: row.user_id as string, exchangeRate: row.exchange_rate as number, exchangeRateUpdatedAt: (row.exchange_rate_updated_at as string) ?? null, savingsTarget: (row.savings_target as number) ?? 0 };
 }
 
 function mapDebt(row: Record<string, unknown>): DebtAccount {
   return {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
     currency: row.currency as 'COP' | 'USD', currentBalance: row.current_balance as number,
-    minimumMonthlyPayment: row.minimum_monthly_payment as number, color: row.color as string,
+    minimumMonthlyPayment: row.minimum_monthly_payment as number,
+    monthlyPayment: typeof row.monthly_payment === 'number' ? row.monthly_payment : 0,
+    color: row.color as string,
   };
 }
 
 function mapIncome(row: Record<string, unknown>): IncomeSource {
   return {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
-    amount: row.amount as number, isRecurring: row.is_recurring as boolean,
+    amount: row.amount as number, currency: (row.currency as 'COP' | 'USD') ?? 'COP',
+    isRecurring: row.is_recurring as boolean,
   };
 }
 
 function mapExpense(row: Record<string, unknown>): FixedExpense {
   return {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
-    amount: row.amount as number, category: row.category as FixedExpense['category'],
+    amount: row.amount as number, currency: (row.currency as 'COP' | 'USD') ?? 'COP',
+    category: row.category as FixedExpense['category'],
   };
 }
 
 function mapSubscription(row: Record<string, unknown>): Subscription {
   return {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
-    currency: row.currency as 'COP' | 'USD', amount: row.amount as number, active: row.active as boolean,
+    currency: row.currency as 'COP' | 'USD', amount: row.amount as number,
+    group: (row.group as string) ?? 'General', active: row.active as boolean,
   };
 }
 
@@ -128,7 +135,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       supabase.from('monthly_snapshots').select('*').eq('user_id', userId).order('month', { ascending: false }),
     ]);
 
-    const mappedSettings = settingsRes.data ? mapSettings(settingsRes.data) : null;
+    let mappedSettings = settingsRes.data ? mapSettings(settingsRes.data) : null;
+
+    // Auto-create settings row if missing
+    if (!mappedSettings) {
+      const { data: newSettings } = await supabase.from('settings').insert({ user_id: userId, exchange_rate: 4000 }).select().single();
+      if (newSettings) mappedSettings = mapSettings(newSettings);
+    }
 
     set({
       userId,
@@ -141,35 +154,41 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       snapshots: (snapshotsRes.data ?? []).map(mapSnapshot),
       loading: false,
     });
-
-    // Auto-fetch live exchange rate in background
-    if (mappedSettings) {
-      fetchUSDtoCOP().then(rate => {
-        if (rate) {
-          const rounded = Math.round(rate);
-          set(s => ({ settings: s.settings ? { ...s.settings, exchangeRate: rounded } : s.settings }));
-          supabase.from('settings').update({ exchange_rate: rounded }).eq('id', mappedSettings.id);
-        }
-      });
-    }
   },
 
   // Settings
   updateExchangeRate: async (rate) => {
     const { userId, settings } = get();
     if (!userId || !settings) return;
-    await supabase.from('settings').update({ exchange_rate: rate }).eq('id', settings.id);
-    set({ settings: { ...settings, exchangeRate: rate } });
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('settings').update({ exchange_rate: rate, exchange_rate_updated_at: now }).eq('user_id', userId);
+    if (error) {
+      console.error('Failed to update exchange rate:', error);
+      // Retry without the timestamp column in case it doesn't exist
+      await supabase.from('settings').update({ exchange_rate: rate }).eq('user_id', userId);
+    }
+    set({ settings: { ...settings, exchangeRate: rate, exchangeRateUpdatedAt: now } });
   },
   refreshExchangeRate: async () => {
-    const { settings } = get();
-    if (!settings) return;
+    const { userId, settings } = get();
+    if (!userId || !settings) return;
     const rate = await fetchUSDtoCOP();
     if (rate) {
       const rounded = Math.round(rate);
-      set({ settings: { ...settings, exchangeRate: rounded } });
-      await supabase.from('settings').update({ exchange_rate: rounded }).eq('id', settings.id);
+      const now = new Date().toISOString();
+      const { error } = await supabase.from('settings').update({ exchange_rate: rounded, exchange_rate_updated_at: now }).eq('user_id', userId);
+      if (error) {
+        console.error('Failed to update exchange rate:', error);
+        await supabase.from('settings').update({ exchange_rate: rounded }).eq('user_id', userId);
+      }
+      set({ settings: { ...settings, exchangeRate: rounded, exchangeRateUpdatedAt: now } });
     }
+  },
+  updateSavingsTarget: async (amount) => {
+    const { userId, settings } = get();
+    if (!userId || !settings) return;
+    await supabase.from('settings').update({ savings_target: amount }).eq('user_id', userId);
+    set({ settings: { ...settings, savingsTarget: amount } });
   },
 
   // Debt accounts
@@ -179,7 +198,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { data } = await supabase.from('debt_accounts').insert({
       user_id: userId, name: account.name, currency: account.currency,
       current_balance: account.currentBalance, minimum_monthly_payment: account.minimumMonthlyPayment,
-      color: account.color,
+      monthly_payment: 0, color: account.color,
     }).select().single();
     if (data) set(s => ({ debtAccounts: [...s.debtAccounts, mapDebt(data)] }));
   },
@@ -189,6 +208,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.currentBalance !== undefined) dbUpdates.current_balance = updates.currentBalance;
     if (updates.minimumMonthlyPayment !== undefined) dbUpdates.minimum_monthly_payment = updates.minimumMonthlyPayment;
+    if (updates.monthlyPayment !== undefined) dbUpdates.monthly_payment = updates.monthlyPayment;
     if (updates.color !== undefined) dbUpdates.color = updates.color;
     await supabase.from('debt_accounts').update(dbUpdates).eq('id', id);
     set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === id ? { ...a, ...updates } : a) }));
@@ -203,7 +223,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('income_sources').insert({
-      user_id: userId, name: source.name, amount: source.amount, is_recurring: source.isRecurring,
+      user_id: userId, name: source.name, amount: source.amount, currency: source.currency,
+      is_recurring: source.isRecurring,
     }).select().single();
     if (data) set(s => ({ incomeSources: [...s.incomeSources, mapIncome(data)] }));
   },
@@ -211,6 +232,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
     await supabase.from('income_sources').update(dbUpdates).eq('id', id);
     set(s => ({ incomeSources: s.incomeSources.map(i => i.id === id ? { ...i, ...updates } : i) }));
@@ -225,7 +247,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('fixed_expenses').insert({
-      user_id: userId, name: expense.name, amount: expense.amount, category: expense.category,
+      user_id: userId, name: expense.name, amount: expense.amount, currency: expense.currency,
+      category: expense.category,
     }).select().single();
     if (data) set(s => ({ fixedExpenses: [...s.fixedExpenses, mapExpense(data)] }));
   },
@@ -233,6 +256,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
     await supabase.from('fixed_expenses').update(dbUpdates).eq('id', id);
     set(s => ({ fixedExpenses: s.fixedExpenses.map(e => e.id === id ? { ...e, ...updates } : e) }));
@@ -247,7 +271,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('subscriptions').insert({
-      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, active: sub.active,
+      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, group: sub.group, active: sub.active,
     }).select().single();
     if (data) set(s => ({ subscriptions: [...s.subscriptions, mapSubscription(data)] }));
   },
@@ -256,6 +280,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+    if (updates.group !== undefined) dbUpdates.group = updates.group;
     if (updates.active !== undefined) dbUpdates.active = updates.active;
     await supabase.from('subscriptions').update(dbUpdates).eq('id', id);
     set(s => ({ subscriptions: s.subscriptions.map(sub => sub.id === id ? { ...sub, ...updates } : sub) }));
@@ -275,6 +300,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     }).select().single();
     if (data) set(s => ({ spending: [mapSpending(data), ...s.spending] }));
   },
+  updateSpending: async (id, updates) => {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if (updates.paymentMethod !== undefined) dbUpdates.payment_method = updates.paymentMethod;
+    await supabase.from('spending').update(dbUpdates).eq('id', id);
+    set(s => ({ spending: s.spending.map(e => e.id === id ? { ...e, ...updates } : e) }));
+  },
   deleteSpending: async (id) => {
     await supabase.from('spending').delete().eq('id', id);
     set(s => ({ spending: s.spending.filter(e => e.id !== id) }));
@@ -284,13 +319,21 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   saveSnapshot: async (snapshot) => {
     const { userId } = get();
     if (!userId) return;
-    const { data } = await supabase.from('monthly_snapshots').insert({
+    const row = {
       user_id: userId, month: snapshot.month, debt_balances: snapshot.debtBalances,
       income_entries: snapshot.incomeEntries, side_income: snapshot.sideIncome,
       total_income: snapshot.totalIncome, total_expenses: snapshot.totalExpenses,
       total_debt_paid: snapshot.totalDebtPaid, new_charges: snapshot.newCharges,
       balance: snapshot.balance, cash_on_hand: snapshot.cashOnHand, savings: snapshot.savings,
-    }).select().single();
-    if (data) set(s => ({ snapshots: [mapSnapshot(data), ...s.snapshots] }));
+    };
+    const { data } = await supabase.from('monthly_snapshots').upsert(row, { onConflict: 'user_id,month' }).select().single();
+    if (data) {
+      const mapped = mapSnapshot(data);
+      set(s => ({
+        snapshots: s.snapshots.some(sn => sn.month === mapped.month)
+          ? s.snapshots.map(sn => sn.month === mapped.month ? mapped : sn)
+          : [mapped, ...s.snapshots],
+      }));
+    }
   },
 }));

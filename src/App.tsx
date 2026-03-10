@@ -10,6 +10,7 @@ const Spending = lazy(() => import('@/pages/Spending'));
 const Monthly = lazy(() => import('@/pages/Monthly'));
 const Projections = lazy(() => import('@/pages/Projections'));
 const Settings = lazy(() => import('@/pages/Settings'));
+const Import = lazy(() => import('@/pages/Import'));
 
 function PageLoader() {
   return (
@@ -37,6 +38,7 @@ function App() {
                       <Route path="/monthly" element={<Monthly />} />
                       <Route path="/projections" element={<Projections />} />
                       <Route path="/settings" element={<Settings />} />
+                      <Route path="/import" element={<Import />} />
                     </Routes>
                   </Suspense>
                 </AppLayout>

@@ -1,13 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatDate, getCurrentMonth } from '@/lib/formatters';
 import SpendingDonut from '@/components/charts/SpendingDonut';
 import AddSpendingSheet from '@/components/modals/AddSpendingSheet';
-import type { SpendingCategory } from '@/types';
+import type { SpendingCategory, PaymentMethod } from '@/types';
 import { toast } from 'sonner';
 
 const categoryLabels: Record<string, string> = {
@@ -15,12 +17,24 @@ const categoryLabels: Record<string, string> = {
   entertainment: 'Entertainment', health: 'Health', shopping: 'Shopping', other: 'Other',
 };
 
+const paymentLabel: Record<string, string> = {
+  cash: 'Cash', debit: 'Debit', credit_mastercard_cop: 'MC COP',
+  credit_mastercard_usd: 'MC USD', credit_visa: 'Visa',
+};
+
 const allCategories: SpendingCategory[] = ['groceries', 'transport', 'food', 'entertainment', 'health', 'shopping', 'other'];
+const allPaymentMethods: { value: PaymentMethod; label: string }[] = [
+  { value: 'cash', label: 'Cash' }, { value: 'debit', label: 'Debit' },
+  { value: 'credit_mastercard_cop', label: 'MC COP' }, { value: 'credit_mastercard_usd', label: 'MC USD' },
+  { value: 'credit_visa', label: 'Visa' },
+];
 
 export default function Spending() {
   const spending = useFinanceStore(s => s.spending);
+  const updateSpending = useFinanceStore(s => s.updateSpending);
   const deleteSpending = useFinanceStore(s => s.deleteSpending);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<SpendingCategory | 'all'>('all');
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
 
@@ -96,20 +110,37 @@ export default function Spending() {
           ) : (
             <div className="space-y-2">
               {filtered.map(entry => (
-                <div key={entry.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{entry.description}</p>
-                    <div className="flex gap-2 mt-0.5">
-                      <span className="text-xs text-muted-foreground">{formatDate(entry.date)}</span>
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{categoryLabels[entry.category]}</Badge>
+                <div key={entry.id} className="border-b border-border last:border-0">
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{entry.description}</p>
+                      <div className="flex gap-2 mt-0.5 items-center">
+                        <span className="text-xs text-muted-foreground">{formatDate(entry.date)}</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{categoryLabels[entry.category]}</Badge>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{paymentLabel[entry.paymentMethod]}</Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-sm font-medium text-destructive mr-1">-{formatCOP(entry.amount)}</span>
+                      <button onClick={() => setEditingId(prev => prev === entry.id ? null : entry.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === entry.id ? 'text-primary' : ''}`}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(entry.id)} className="p-1.5 text-muted-foreground hover:text-destructive transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-destructive">-{formatCOP(entry.amount)}</span>
-                    <button onClick={() => handleDelete(entry.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {editingId === entry.id && (
+                    <div className="pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div><label className="text-[10px] text-muted-foreground">Description</label><Input defaultValue={entry.description} onBlur={e => { if (e.target.value !== entry.description) updateSpending(entry.id, { description: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                      <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={entry.amount} onBlur={e => { const v = Number(e.target.value); if (v !== entry.amount) updateSpending(entry.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                      <div><label className="text-[10px] text-muted-foreground">Date</label><Input type="date" defaultValue={entry.date} onBlur={e => { if (e.target.value !== entry.date) updateSpending(entry.id, { date: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                      <div><label className="text-[10px] text-muted-foreground">Category</label>
+                        <Select value={entry.category} onValueChange={v => updateSpending(entry.id, { category: v as SpendingCategory })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{allCategories.map(c => <SelectItem key={c} value={c}>{categoryLabels[c]}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="sm:col-span-2"><label className="text-[10px] text-muted-foreground">Payment Method</label>
+                        <Select value={entry.paymentMethod} onValueChange={v => updateSpending(entry.id, { paymentMethod: v as PaymentMethod })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{allPaymentMethods.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent></Select></div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

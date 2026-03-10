@@ -64,7 +64,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="bg-card border-border">
+      <SheetContent className="bg-card border-border px-6">
         <SheetHeader>
           <SheetTitle>Add Spending</SheetTitle>
         </SheetHeader>

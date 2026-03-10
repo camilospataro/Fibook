@@ -37,7 +37,7 @@ All monetary values are in COP (Colombian Pesos) unless noted as USD. Exchange r
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 512,
         system: systemPrompt,
         messages: [

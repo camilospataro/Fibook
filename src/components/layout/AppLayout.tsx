@@ -7,13 +7,16 @@ import BottomNav from './BottomNav';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const fetchAll = useFinanceStore(s => s.fetchAll);
+  const userId = useFinanceStore(s => s.userId);
   const loading = useFinanceStore(s => s.loading);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) fetchAll(data.user.id);
-    });
-  }, [fetchAll]);
+    if (!userId) {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user) fetchAll(data.user.id);
+      });
+    }
+  }, [fetchAll, userId]);
 
   if (loading) {
     return (
@@ -28,7 +31,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <main className="flex-1 pb-20 md:pb-0 overflow-y-auto">
+      <main className="flex-1 pb-16 md:pb-0 overflow-y-auto">
         {children}
       </main>
       <BottomNav />

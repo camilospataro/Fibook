@@ -6,6 +6,8 @@ create table settings (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
   exchange_rate numeric not null default 4000,
+  exchange_rate_updated_at timestamptz,
+  savings_target numeric not null default 0,
   created_at timestamptz default now()
 );
 alter table settings enable row level security;
@@ -19,6 +21,7 @@ create table debt_accounts (
   currency text not null default 'COP' check (currency in ('COP', 'USD')),
   current_balance numeric not null default 0,
   minimum_monthly_payment numeric not null default 0,
+  monthly_payment numeric not null default 0,
   color text not null default '#FF6B6B',
   created_at timestamptz default now()
 );
@@ -31,6 +34,7 @@ create table income_sources (
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   amount numeric not null default 0,
+  currency text not null default 'COP' check (currency in ('COP', 'USD')),
   is_recurring boolean not null default true,
   created_at timestamptz default now()
 );
@@ -43,6 +47,7 @@ create table fixed_expenses (
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   amount numeric not null default 0,
+  currency text not null default 'COP' check (currency in ('COP', 'USD')),
   category text not null default 'other' check (category in ('housing', 'food', 'transport', 'entertainment', 'health', 'other')),
   created_at timestamptz default now()
 );
@@ -56,6 +61,7 @@ create table subscriptions (
   name text not null,
   currency text not null default 'COP' check (currency in ('COP', 'USD')),
   amount numeric not null default 0,
+  "group" text not null default 'General',
   active boolean not null default true,
   created_at timestamptz default now()
 );

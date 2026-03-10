@@ -16,7 +16,7 @@ export default function Projections() {
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
 
   const totalDebt = totalDebtCOP(accounts, exchangeRate);
-  const income = totalMonthlyIncome(incomeSources);
+  const income = totalMonthlyIncome(incomeSources, exchangeRate);
   const expenses = totalMonthlyExpenses(fixedExpenses, accounts, subs, exchangeRate);
   const minPayments = totalMinimumPaymentsCOP(accounts, exchangeRate);
   const balance = income - expenses;

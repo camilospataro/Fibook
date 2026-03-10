@@ -10,6 +10,11 @@ const categoryEmoji: Record<string, string> = {
   health: '💊', shopping: '🛍️', other: '📦',
 };
 
+const paymentLabel: Record<string, string> = {
+  cash: 'Cash', debit: 'Debit', credit_mastercard_cop: 'MC COP',
+  credit_mastercard_usd: 'MC USD', credit_visa: 'Visa',
+};
+
 export default function RecentSpending() {
   const spending = useFinanceStore(s => s.spending);
   const navigate = useNavigate();
@@ -34,7 +39,7 @@ export default function RecentSpending() {
                   <span className="text-lg">{categoryEmoji[entry.category] ?? '📦'}</span>
                   <div>
                     <p className="text-sm font-medium">{entry.description}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(entry.date)}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(entry.date)} · {paymentLabel[entry.paymentMethod] ?? entry.paymentMethod}</p>
                   </div>
                 </div>
                 <span className="text-sm font-medium text-destructive">-{formatCOP(entry.amount)}</span>
