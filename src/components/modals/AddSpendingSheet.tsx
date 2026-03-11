@@ -28,12 +28,9 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const addSpending = useFinanceStore(s => s.addSpending);
   const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
-  const subscriptions = useFinanceStore(s => s.subscriptions);
-
-  const budgetItems = useMemo(() => [
-    ...fixedExpenses.map(e => ({ id: e.id, name: e.name, type: 'expense' as const, amount: e.amount, currency: e.currency })),
-    ...subscriptions.filter(s => s.active).map(s => ({ id: s.id, name: s.name, type: 'subscription' as const, amount: s.amount, currency: s.currency })),
-  ], [fixedExpenses, subscriptions]);
+  const budgetItems = useMemo(() =>
+    fixedExpenses.map(e => ({ id: e.id, name: e.name, amount: e.amount, currency: e.currency })),
+  [fixedExpenses]);
 
   const [date, setDate] = useState(getToday());
   const [description, setDescription] = useState('');
