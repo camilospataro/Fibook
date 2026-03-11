@@ -82,6 +82,19 @@ create table spending (
 alter table spending enable row level security;
 create policy "Users can manage own spending" on spending for all using (auth.uid() = user_id);
 
+-- Savings Accounts
+create table savings_accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  name text not null,
+  currency text not null default 'COP' check (currency in ('COP', 'USD')),
+  current_balance numeric not null default 0,
+  color text not null default '#00D4AA',
+  created_at timestamptz default now()
+);
+alter table savings_accounts enable row level security;
+create policy "Users can manage own savings accounts" on savings_accounts for all using (auth.uid() = user_id);
+
 -- Monthly Snapshots
 create table monthly_snapshots (
   id uuid primary key default gen_random_uuid(),

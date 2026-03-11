@@ -17,6 +17,15 @@ export interface DebtAccount {
   color: string;
 }
 
+export interface SavingsAccount {
+  id: string;
+  userId: string;
+  name: string;
+  currency: 'COP' | 'USD';
+  currentBalance: number;
+  color: string;
+}
+
 export interface IncomeSource {
   id: string;
   userId: string;

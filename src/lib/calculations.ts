@@ -1,6 +1,13 @@
-import type { DebtAccount, Subscription, IncomeSource, FixedExpense } from '@/types';
+import type { DebtAccount, SavingsAccount, Subscription, IncomeSource, FixedExpense } from '@/types';
 
 export function totalDebtCOP(accounts: DebtAccount[], exchangeRate: number): number {
+  return accounts.reduce((sum, acc) => {
+    const balanceCOP = acc.currency === 'USD' ? acc.currentBalance * exchangeRate : acc.currentBalance;
+    return sum + balanceCOP;
+  }, 0);
+}
+
+export function totalSavingsCOP(accounts: SavingsAccount[], exchangeRate: number): number {
   return accounts.reduce((sum, acc) => {
     const balanceCOP = acc.currency === 'USD' ? acc.currentBalance * exchangeRate : acc.currentBalance;
     return sum + balanceCOP;

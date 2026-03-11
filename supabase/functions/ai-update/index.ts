@@ -65,6 +65,11 @@ Return a JSON object with this exact structure:
       "updates": { "amount": <number>, "active": <boolean> }
     },
     {
+      "type": "updateSavingsAccount",
+      "id": "<account id>",
+      "updates": { "currentBalance": <number> }
+    },
+    {
       "type": "addSpending",
       "data": { "date": "YYYY-MM-DD", "description": "<string>", "amount": <number>, "category": "<groceries|transport|food|entertainment|health|shopping|other>", "paymentMethod": "<cash|debit|credit_mastercard_cop|credit_mastercard_usd|credit_visa>" }
     }
@@ -76,7 +81,7 @@ Rules:
 - All monetary amounts in COP unless the user specifies USD
 - Match account/expense/income names to IDs from the provided data (fuzzy match is OK)
 - For snapshot updates, use the current month (provided in data) unless user specifies otherwise
-- If the user mentions savings account balance, update the snapshot's "savings" field
+- If the user mentions a specific savings account balance (e.g. "I have 5M in Bancolombia"), update the savingsAccount's currentBalance
 - If the user mentions cash on hand, update the snapshot's "cashOnHand" field
 - Only include actions you're confident about. If something is ambiguous, mention it in the summary
 - Return ONLY valid JSON, no markdown, no code fences, no extra text
