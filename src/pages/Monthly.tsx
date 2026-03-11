@@ -268,6 +268,60 @@ export default function Monthly() {
         </div>
       </div>
 
+      {/* Savings Accounts */}
+      <SectionCard
+        icon={Landmark}
+        title="Savings Accounts"
+        subtitle={formatCOP(totalSavings)}
+        subtitleColor="text-primary"
+        open={openSections.savings}
+        onToggle={() => toggle('savings')}
+        onAdd={() => setShowAddSavings(true)}
+      >
+        <div className="flex items-center justify-between pb-2 mb-1 border-b border-border/50">
+          <p className="text-xs text-muted-foreground">Monthly savings goal</p>
+          <MoneyInput
+            value={savingsAmount}
+            onChange={setSavingsAmount}
+            onBlur={saveSavingsTarget}
+          />
+        </div>
+        {savingsAccounts.length === 0 && <EmptyState text="No savings accounts yet" />}
+        {savingsAccounts.map(acc => (
+          <div key={acc.id} className="border-b border-border/50 last:border-0">
+            <div className="flex items-center justify-between py-2 gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
+                <span className="text-sm truncate">{acc.name}</span>
+                <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <MoneyInput
+                  value={String(acc.currentBalance)}
+                  onChange={v => store.updateSavingsAccount(acc.id, { currentBalance: Number(v) || 0 })}
+                  onBlur={() => {}}
+                />
+                <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setDeleteConfirm({ type: 'savings', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+            {editingId === acc.id && (
+              <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateSavingsAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                <div><label className="text-[10px] text-muted-foreground">Currency</label>
+                  <Select value={acc.currency} onValueChange={v => store.updateSavingsAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                <div><label className="text-[10px] text-muted-foreground">Color</label>
+                  <div className="flex gap-1 flex-wrap pt-1">{SAVINGS_COLORS.map(c => (<button key={c} onClick={() => store.updateSavingsAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
+              </div>
+            )}
+          </div>
+        ))}
+      </SectionCard>
+
       {/* Income */}
       <SectionCard
         icon={DollarSign}
@@ -487,60 +541,6 @@ export default function Monthly() {
           <p className="text-xs text-muted-foreground">Auto-calculated from credit card spending this month.</p>
         </CardContent>
       </Card>
-
-      {/* Savings Accounts */}
-      <SectionCard
-        icon={Landmark}
-        title="Savings Accounts"
-        subtitle={formatCOP(totalSavings)}
-        subtitleColor="text-primary"
-        open={openSections.savings}
-        onToggle={() => toggle('savings')}
-        onAdd={() => setShowAddSavings(true)}
-      >
-        <div className="flex items-center justify-between pb-2 mb-1 border-b border-border/50">
-          <p className="text-xs text-muted-foreground">Monthly savings goal</p>
-          <MoneyInput
-            value={savingsAmount}
-            onChange={setSavingsAmount}
-            onBlur={saveSavingsTarget}
-          />
-        </div>
-        {savingsAccounts.length === 0 && <EmptyState text="No savings accounts yet" />}
-        {savingsAccounts.map(acc => (
-          <div key={acc.id} className="border-b border-border/50 last:border-0">
-            <div className="flex items-center justify-between py-2 gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
-                <span className="text-sm truncate">{acc.name}</span>
-                <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <MoneyInput
-                  value={String(acc.currentBalance)}
-                  onChange={v => store.updateSavingsAccount(acc.id, { currentBalance: Number(v) || 0 })}
-                  onBlur={() => {}}
-                />
-                <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setDeleteConfirm({ type: 'savings', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            {editingId === acc.id && (
-              <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
-                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateSavingsAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Currency</label>
-                  <Select value={acc.currency} onValueChange={v => store.updateSavingsAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
-                <div><label className="text-[10px] text-muted-foreground">Color</label>
-                  <div className="flex gap-1 flex-wrap pt-1">{SAVINGS_COLORS.map(c => (<button key={c} onClick={() => store.updateSavingsAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
-              </div>
-            )}
-          </div>
-        ))}
-      </SectionCard>
 
       {/* Summary */}
       <Card className="bg-card border-primary/20 border">
