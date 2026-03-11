@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFinanceStore } from '@/store/useFinanceStore';
-import { getToday } from '@/lib/formatters';
-import type { SpendingCategory, PaymentMethod } from '@/types';
+import { getToday, formatCurrency } from '@/lib/formatters';
+import type { SpendingCategory } from '@/types';
 import { toast } from 'sonner';
 
 const categories: { value: SpendingCategory; label: string }[] = [
@@ -19,14 +19,6 @@ const categories: { value: SpendingCategory; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-const basePaymentMethods: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'debit', label: 'Debit' },
-  { value: 'credit_mastercard_cop', label: 'Mastercard COP' },
-  { value: 'credit_mastercard_usd', label: 'Mastercard USD' },
-  { value: 'credit_visa', label: 'Visa' },
-];
-
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,18 +27,20 @@ interface Props {
 export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const addSpending = useFinanceStore(s => s.addSpending);
   const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
-  const paymentMethods = useMemo(() => [
-    ...basePaymentMethods,
-    ...checkingAccounts.map(acc => ({
-      value: `checking_${acc.id}` as PaymentMethod,
-      label: acc.name,
-    })),
-  ], [checkingAccounts]);
+  const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
+  const subscriptions = useFinanceStore(s => s.subscriptions);
+
+  const budgetItems = useMemo(() => [
+    ...fixedExpenses.map(e => ({ id: e.id, name: e.name, type: 'expense' as const, amount: e.amount, currency: e.currency })),
+    ...subscriptions.filter(s => s.active).map(s => ({ id: s.id, name: s.name, type: 'subscription' as const, amount: s.amount, currency: s.currency })),
+  ], [fixedExpenses, subscriptions]);
+
   const [date, setDate] = useState(getToday());
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<SpendingCategory>('other');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [linkedAccountId, setLinkedAccountId] = useState<string | null>(null);
+  const [linkedBudgetId, setLinkedBudgetId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -58,13 +52,16 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
       description,
       amount: Number(amount),
       category,
-      paymentMethod,
+      paymentMethod: linkedAccountId ? `checking_${linkedAccountId}` : 'cash',
+      linkedAccountId,
+      linkedBudgetId,
     });
     toast.success('Spending added');
     setDescription('');
     setAmount('');
     setCategory('other');
-    setPaymentMethod('cash');
+    setLinkedAccountId(null);
+    setLinkedBudgetId(null);
     setDate(getToday());
     setSaving(false);
     onOpenChange(false);
@@ -99,11 +96,30 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Payment Method</Label>
-            <Select value={paymentMethod} onValueChange={v => setPaymentMethod(v as PaymentMethod)}>
+            <Label>Pay From</Label>
+            <Select value={linkedAccountId ?? 'none'} onValueChange={v => setLinkedAccountId(v === 'none' ? null : v)}>
               <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {paymentMethods.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                <SelectItem value="none">Cash / Other</SelectItem>
+                {checkingAccounts.map(a => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name} ({formatCurrency(a.currentBalance, a.currency)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Link to Budget</Label>
+            <Select value={linkedBudgetId ?? 'none'} onValueChange={v => setLinkedBudgetId(v === 'none' ? null : v)}>
+              <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {budgetItems.map(b => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name} ({formatCurrency(b.amount, b.currency)})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

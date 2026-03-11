@@ -114,6 +114,8 @@ function mapSpending(row: Record<string, unknown>): SpendingEntry {
     description: row.description as string, amount: row.amount as number,
     category: row.category as SpendingEntry['category'],
     paymentMethod: row.payment_method as SpendingEntry['paymentMethod'],
+    linkedAccountId: (row.linked_account_id as string) ?? null,
+    linkedBudgetId: (row.linked_budget_id as string) ?? null,
   };
 }
 
@@ -349,17 +351,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { data } = await supabase.from('spending').insert({
       user_id: userId, date: entry.date, description: entry.description, amount: entry.amount,
       category: entry.category, payment_method: entry.paymentMethod,
+      linked_account_id: entry.linkedAccountId ?? null,
+      linked_budget_id: entry.linkedBudgetId ?? null,
     }).select().single();
     if (data) {
       set(s => ({ spending: [mapSpending(data), ...s.spending] }));
-      // Deduct from checking account if payment method is checking_<id>
-      if (entry.paymentMethod.startsWith('checking_')) {
-        const accountId = entry.paymentMethod.replace('checking_', '');
+      // Deduct from linked checking account
+      const accountId = entry.linkedAccountId;
+      if (accountId) {
         const account = get().checkingAccounts.find(a => a.id === accountId);
         if (account) {
           const newBalance = account.currentBalance - entry.amount;
-          const dbUpdates = { current_balance: newBalance };
-          await supabase.from('savings_accounts').update(dbUpdates).eq('id', accountId);
+          await supabase.from('savings_accounts').update({ current_balance: newBalance }).eq('id', accountId);
           set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === accountId ? { ...a, currentBalance: newBalance } : a) }));
         }
       }
@@ -372,6 +375,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
     if (updates.paymentMethod !== undefined) dbUpdates.payment_method = updates.paymentMethod;
+    if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
+    if (updates.linkedBudgetId !== undefined) dbUpdates.linked_budget_id = updates.linkedBudgetId;
     await supabase.from('spending').update(dbUpdates).eq('id', id);
     set(s => ({ spending: s.spending.map(e => e.id === id ? { ...e, ...updates } : e) }));
   },

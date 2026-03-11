@@ -76,7 +76,9 @@ create table spending (
   description text not null,
   amount numeric not null default 0,
   category text not null default 'other' check (category in ('groceries', 'transport', 'food', 'entertainment', 'health', 'shopping', 'other')),
-  payment_method text not null default 'cash' check (payment_method in ('cash', 'debit', 'credit_mastercard_cop', 'credit_mastercard_usd', 'credit_visa')),
+  payment_method text not null default 'cash',
+  linked_account_id uuid references savings_accounts(id) on delete set null,
+  linked_budget_id uuid,
   created_at timestamptz default now()
 );
 alter table spending enable row level security;

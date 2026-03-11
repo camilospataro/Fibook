@@ -67,6 +67,8 @@ export interface SpendingEntry {
   amount: number;
   category: 'groceries' | 'transport' | 'food' | 'entertainment' | 'health' | 'shopping' | 'other';
   paymentMethod: 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa' | `checking_${string}`;
+  linkedAccountId: string | null;
+  linkedBudgetId: string | null;
 }
 
 export interface MonthlySnapshot {
