@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Wallet, CalendarCheck, TrendingUp, Settings } from 'lucide-react';
+import { LayoutDashboard, Wallet, CalendarCheck, Play, Settings } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Home' },
   { to: '/spending', icon: Wallet, label: 'Spending' },
   { to: '/monthly', icon: CalendarCheck, label: 'Monthly' },
-  { to: '/projections', icon: TrendingUp, label: 'Projections' },
+  { to: '/simulation', icon: Play, label: 'Simulate' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

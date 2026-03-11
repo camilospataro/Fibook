@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Wallet, CalendarCheck, TrendingUp, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Wallet, CalendarCheck, TrendingUp, Settings, LogOut, Play } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatMonthLabel, getCurrentMonth } from '@/lib/formatters';
@@ -8,6 +8,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/spending', icon: Wallet, label: 'Spending' },
   { to: '/monthly', icon: CalendarCheck, label: 'Monthly' },
+  { to: '/simulation', icon: Play, label: 'Simulation' },
   { to: '/projections', icon: TrendingUp, label: 'Projections' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
