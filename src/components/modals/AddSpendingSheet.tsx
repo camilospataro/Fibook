@@ -108,10 +108,9 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
           </div>
           <div className="space-y-2">
             <Label>Link to Budget</Label>
-            <Select value={linkedBudgetId ?? 'none'} onValueChange={v => setLinkedBudgetId(v === 'none' ? null : v)}>
-              <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+            <Select value={linkedBudgetId ?? ''} onValueChange={v => setLinkedBudgetId(v || null)}>
+              <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Select budget item" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
                 {budgetItems.map(b => (
                   <SelectItem key={b.id} value={b.id}>
                     {b.name} ({formatCurrency(b.amount, b.currency)})
