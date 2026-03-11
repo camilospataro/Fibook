@@ -32,8 +32,6 @@ export default function Monthly() {
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
   const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
   const saveSnapshot = useFinanceStore(s => s.saveSnapshot);
-  const updateDebtAccount = useFinanceStore(s => s.updateDebtAccount);
-  const updateIncomeSource = useFinanceStore(s => s.updateIncomeSource);
   const updateSavingsTarget = useFinanceStore(s => s.updateSavingsTarget);
 
   const [aiUpdateOpen, setAiUpdateOpen] = useState(false);
@@ -58,15 +56,11 @@ export default function Monthly() {
   });
   const toggle = (key: string) => setOpenSections(p => ({ ...p, [key]: !p[key] }));
 
-  // Debt balances
-  const [debtBalances, setDebtBalances] = useState<Record<string, string>>(() =>
-    Object.fromEntries(accounts.map(a => [a.id, String(a.currentBalance)]))
-  );
-
-  // Income
-  const [incomeAmounts, setIncomeAmounts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(incomeSources.map(s => [s.id, String(s.amount)]))
-  );
+  // Derived amounts from store (for charts & calculations)
+  const incomeAmounts = useMemo(() =>
+    Object.fromEntries(incomeSources.map(s => [s.id, String(s.amount)])), [incomeSources]);
+  const debtBalances = useMemo(() =>
+    Object.fromEntries(accounts.map(a => [a.id, String(a.currentBalance)])), [accounts]);
   const snapshots = useFinanceStore(s => s.snapshots);
   const currentSnapshot = useMemo(() => snapshots.find(s => s.month === currentMonth), [snapshots, currentMonth]);
   const [sideIncome, setSideIncome] = useState(() => String(currentSnapshot?.sideIncome ?? 0));
@@ -86,32 +80,9 @@ export default function Monthly() {
     monthlySpending.filter(e => e.paymentMethod.startsWith('credit_')).reduce((sum, e) => sum + e.amount, 0),
     [monthlySpending]
   );
-  const [ccPayments, setCcPayments] = useState<Record<string, string>>(() =>
-    Object.fromEntries(accounts.map(a => [a.id, String(a.monthlyPayment || 0)]))
-  );
+  const ccPayments = useMemo(() =>
+    Object.fromEntries(accounts.map(a => [a.id, String(a.monthlyPayment || 0)])), [accounts]);
 
-  // Auto-save on blur
-  function saveDebtBalance(accId: string) {
-    const acc = accounts.find(a => a.id === accId);
-    const newVal = Number(debtBalances[accId]) || 0;
-    if (acc && newVal !== acc.currentBalance) {
-      updateDebtAccount(accId, { currentBalance: newVal });
-    }
-  }
-  function saveIncomeAmount(srcId: string) {
-    const src = incomeSources.find(s => s.id === srcId);
-    const newVal = Number(incomeAmounts[srcId]) || 0;
-    if (src && newVal !== src.amount) {
-      updateIncomeSource(srcId, { amount: newVal });
-    }
-  }
-  function saveCcPayment(accId: string) {
-    const acc = accounts.find(a => a.id === accId);
-    const newVal = Number(ccPayments[accId]) || 0;
-    if (acc && newVal !== acc.monthlyPayment) {
-      updateDebtAccount(accId, { monthlyPayment: newVal });
-    }
-  }
 
   // Savings
   const [savingsAmount, setSavingsAmount] = useState(String(savingsTarget));
@@ -315,47 +286,42 @@ export default function Monthly() {
           >
             {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
             {checkingAccounts.map(acc => (
-              <div key={acc.id} className="border-b border-border/50 last:border-0">
-                <div className="flex items-center justify-between py-2 gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
-                    <span className="text-sm truncate">{acc.name}</span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <MoneyInput
-                      value={String(acc.currentBalance)}
-                      onChange={v => store.updateCheckingAccount(acc.id, { currentBalance: Number(v) || 0 })}
-                      onBlur={() => {}}
-                    />
-                    <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                {editingId === acc.id && (
+              <ItemRow key={acc.id} onDelete={() => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name })}
+                onEdit={() => toggleEdit(acc.id)} expanded={editingId === acc.id}
+                editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Balance</label><Input type="number" defaultValue={acc.currentBalance} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.currentBalance) store.updateCheckingAccount(acc.id, { currentBalance: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
                       <Select value={acc.currency} onValueChange={v => store.updateCheckingAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                     <div><label className="text-[10px] text-muted-foreground">Color</label>
                       <div className="flex gap-1 flex-wrap pt-1">{CHECKING_COLORS.map(c => (<button key={c} onClick={() => store.updateCheckingAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
                   </div>
-                )}
-              </div>
+                }
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
+                  <span className="text-sm truncate">{acc.name}</span>
+                  <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
+                </div>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(acc.currentBalance, acc.currency)}</span>
+              </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between py-1">
               <span className="text-xs text-muted-foreground">Monthly savings goal</span>
-              <MoneyInput
-                value={savingsAmount}
-                onChange={setSavingsAmount}
-                onBlur={saveSavingsTarget}
-              />
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{formatCOP(Number(savingsAmount) || 0)}</span>
+                <button onClick={() => toggleEdit('savings-goal')} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === 'savings-goal' ? 'text-primary' : ''}`}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
+            {editingId === 'savings-goal' && (
+              <div className="pb-2 pt-1">
+                <Input type="number" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} onBlur={saveSavingsTarget} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Monthly savings goal" />
+              </div>
+            )}
           </SectionCard>
 
           {/* Debt Balances */}
@@ -369,37 +335,26 @@ export default function Monthly() {
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
             {accounts.map(acc => (
-              <div key={acc.id} className="border-b border-border/50 last:border-0">
-                <div className="flex items-center justify-between py-2 gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
-                    <span className="text-sm truncate">{acc.name}</span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <MoneyInput
-                      value={debtBalances[acc.id] ?? String(acc.currentBalance)}
-                      onChange={v => setDebtBalances(p => ({ ...p, [acc.id]: v }))}
-                      onBlur={() => saveDebtBalance(acc.id)}
-                    />
-                    <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                {editingId === acc.id && (
+              <ItemRow key={acc.id} onDelete={() => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name })}
+                onEdit={() => toggleEdit(acc.id)} expanded={editingId === acc.id}
+                editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateDebtAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Balance</label><Input type="number" defaultValue={acc.currentBalance} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.currentBalance) store.updateDebtAccount(acc.id, { currentBalance: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
                       <Select value={acc.currency} onValueChange={v => store.updateDebtAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                     <div><label className="text-[10px] text-muted-foreground">Color</label>
                       <div className="flex gap-1 flex-wrap pt-1">{DEBT_COLORS.map(c => (<button key={c} onClick={() => store.updateDebtAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
                   </div>
-                )}
-              </div>
+                }
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
+                  <span className="text-sm truncate">{acc.name}</span>
+                  <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
+                </div>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(acc.currentBalance, acc.currency)}</span>
+              </ItemRow>
             ))}
           </SectionCard>
 
@@ -489,51 +444,44 @@ export default function Monthly() {
           >
             {incomeSources.length === 0 && <EmptyState text="No income sources" />}
             {incomeSources.map(src => (
-              <div key={src.id} className="border-b border-border/50 last:border-0">
-                <div className="flex items-center gap-3 py-2">
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <span className="text-sm truncate">{src.name}</span>
-                    {src.isRecurring && <Badge variant="secondary" className="text-[10px]">Recurring</Badge>}
-                    <Badge variant="outline" className="text-[10px]">{src.currency}</Badge>
-                  </div>
-                  <MoneyInput
-                    value={incomeAmounts[src.id] ?? ''}
-                    onChange={v => setIncomeAmounts(p => ({ ...p, [src.id]: v }))}
-                    onBlur={() => saveIncomeAmount(src.id)}
-                  />
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => toggleEdit(src.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === src.id ? 'text-primary' : ''}`}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => setDeleteConfirm({ type: 'income', id: src.id, name: src.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                {editingId === src.id && (
-                  <div className="pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <ItemRow key={src.id} onDelete={() => setDeleteConfirm({ type: 'income', id: src.id, name: src.name })}
+                onEdit={() => toggleEdit(src.id)} expanded={editingId === src.id}
+                editContent={
+                  <div className="pb-3 pt-1 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={src.name} onBlur={e => { if (e.target.value !== src.name) store.updateIncomeSource(src.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={src.amount} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== src.amount) store.updateIncomeSource(src.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
                       <Select value={src.currency} onValueChange={v => store.updateIncomeSource(src.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
-                    <div className="sm:col-span-2 flex items-center gap-2"><Switch checked={src.isRecurring} onCheckedChange={v => store.updateIncomeSource(src.id, { isRecurring: v })} /><label className="text-xs text-muted-foreground">Recurring</label></div>
-                    <div><label className="text-[10px] text-muted-foreground">Deposit To</label>
-                      <Select value={src.linkedAccountId ?? 'none'} onValueChange={v => store.updateIncomeSource(src.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
                     <div><label className="text-[10px] text-muted-foreground">Deposit Day</label><Input type="number" min="1" max="31" defaultValue={src.depositDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== src.depositDay) store.updateIncomeSource(src.id, { depositDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div className="col-span-2 flex items-center gap-2"><Switch checked={src.isRecurring} onCheckedChange={v => store.updateIncomeSource(src.id, { isRecurring: v })} /><label className="text-xs text-muted-foreground">Recurring</label></div>
+                    <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Deposit To</label>
+                      <Select value={src.linkedAccountId ?? 'none'} onValueChange={v => store.updateIncomeSource(src.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
-                )}
-              </div>
+                }
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm truncate">{src.name}</span>
+                  {src.isRecurring && <Badge variant="secondary" className="text-[10px]">Recurring</Badge>}
+                  <Badge variant="outline" className="text-[10px]">{src.currency}</Badge>
+                </div>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(src.amount, src.currency)}</span>
+              </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground flex-1">Side Income</span>
-              <Input
-                type="number"
-                value={sideIncome}
-                onChange={e => setSideIncome(e.target.value)}
-                className="w-32 bg-secondary border-border text-right text-sm h-8"
-              />
-              <div className="w-3.5" />
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-muted-foreground">Side Income</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{formatCOP(Number(sideIncome) || 0)}</span>
+                <button onClick={() => toggleEdit('side-income')} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === 'side-income' ? 'text-primary' : ''}`}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
+            {editingId === 'side-income' && (
+              <div className="pb-2 pt-1">
+                <Input type="number" value={sideIncome} onChange={e => setSideIncome(e.target.value)} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Side income amount" />
+              </div>
+            )}
           </SectionCard>
 
           {/* Fixed Expenses */}
@@ -651,36 +599,28 @@ export default function Monthly() {
               </div>
             )}
             {accounts.map(acc => (
-              <div key={acc.id} className="border-b border-border/50 last:border-0">
-                <div className="flex items-center justify-between py-2 gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
-                    <div className="min-w-0">
-                      <span className="text-sm truncate block">{acc.name}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        Min: {formatCurrency(acc.minimumMonthlyPayment, acc.currency)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <MoneyInput
-                      value={ccPayments[acc.id] ?? '0'}
-                      onChange={v => setCcPayments(p => ({ ...p, [acc.id]: v }))}
-                      onBlur={() => saveCcPayment(acc.id)}
-                    />
-                    <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                {editingId === acc.id && (
+              <ItemRow key={acc.id} onDelete={() => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name })}
+                onEdit={() => toggleEdit(acc.id)} expanded={editingId === acc.id}
+                editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                    <div><label className="text-[10px] text-muted-foreground">Monthly Payment</label><Input type="number" defaultValue={acc.monthlyPayment || 0} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.monthlyPayment) store.updateDebtAccount(acc.id, { monthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Min. Payment</label><Input type="number" defaultValue={acc.minimumMonthlyPayment} onBlur={e => { const v = Number(e.target.value); if (v !== acc.minimumMonthlyPayment) store.updateDebtAccount(acc.id, { minimumMonthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                    <div><label className="text-[10px] text-muted-foreground">Pay From</label>
+                    <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
                       <Select value={acc.linkedAccountId ?? 'none'} onValueChange={v => store.updateDebtAccount(acc.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
-                )}
-              </div>
+                }
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
+                  <div className="min-w-0">
+                    <span className="text-sm truncate block">{acc.name}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      Min: {formatCurrency(acc.minimumMonthlyPayment, acc.currency)}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(acc.monthlyPayment || 0, acc.currency)}</span>
+              </ItemRow>
             ))}
           </SectionCard>
 
@@ -963,22 +903,6 @@ function ItemRow({ onDelete, onEdit, expanded, editContent, children }: {
   );
 }
 
-function MoneyInput({ value, onChange, onBlur }: { value: string; onChange: (v: string) => void; onBlur: () => void }) {
-  const [focused, setFocused] = useState(false);
-  const raw = value.replace(/[^0-9.]/g, '');
-  const display = focused ? raw : (raw ? `$${Number(raw).toLocaleString()}` : '');
-  return (
-    <Input
-      type="text"
-      inputMode="numeric"
-      value={display}
-      onChange={e => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
-      onFocus={() => setFocused(true)}
-      onBlur={() => { setFocused(false); onBlur(); }}
-      className="w-36 bg-secondary border-border text-right text-sm h-8"
-    />
-  );
-}
 
 function EmptyState({ text }: { text: string }) {
   return <p className="text-xs text-muted-foreground py-2 text-center">{text}</p>;
