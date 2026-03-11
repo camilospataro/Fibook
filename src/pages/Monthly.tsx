@@ -102,9 +102,10 @@ export default function Monthly() {
   const [newCheckingAcct, setNewCheckingAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
   const [newIncome, setNewIncome] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', isRecurring: true, linkedAccountId: null as string | null, depositDay: 1 });
 
-  // Inline editing
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const toggleEdit = (id: string) => setEditingId(prev => prev === id ? null : id);
+  // Edit mode (one toggle per tab)
+  const [editMode, setEditMode] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const toggleExpand = (id: string) => setExpandedId(prev => prev === id ? null : id);
 
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null);
@@ -243,28 +244,40 @@ export default function Monthly() {
       </div>
 
       {/* Tab Toggle */}
-      <div className="flex rounded-lg bg-secondary/50 p-1 gap-1">
+      <div className="flex items-center gap-2">
+        <div className="flex rounded-lg bg-secondary/50 p-1 gap-1 flex-1">
+          <button
+            onClick={() => { setActiveTab('balances'); setEditMode(false); setExpandedId(null); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'balances'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Landmark className="w-4 h-4" />
+            Balances
+          </button>
+          <button
+            onClick={() => { setActiveTab('movements'); setEditMode(false); setExpandedId(null); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'movements'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Repeat className="w-4 h-4" />
+            Movements
+          </button>
+        </div>
         <button
-          onClick={() => setActiveTab('balances')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-            activeTab === 'balances'
-              ? 'bg-card text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
+          onClick={() => { setEditMode(p => !p); setExpandedId(null); }}
+          className={`p-2.5 rounded-lg transition-all ${
+            editMode
+              ? 'bg-primary/20 text-primary'
+              : 'bg-secondary/50 text-muted-foreground hover:text-foreground'
           }`}
         >
-          <Landmark className="w-4 h-4" />
-          Balances
-        </button>
-        <button
-          onClick={() => setActiveTab('movements')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-            activeTab === 'movements'
-              ? 'bg-card text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Repeat className="w-4 h-4" />
-          Movements
+          <Pencil className="w-4 h-4" />
         </button>
       </div>
 
@@ -279,12 +292,12 @@ export default function Monthly() {
             subtitleColor="text-primary"
             open={openSections.checking}
             onToggle={() => toggle('checking')}
-            onAdd={() => setShowAddChecking(true)}
+            onAdd={editMode ? () => setShowAddChecking(true) : undefined}
           >
             {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
             {checkingAccounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={() => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name })}
-                onEdit={() => toggleEdit(acc.id)} expanded={editingId === acc.id}
+              <ItemRow key={acc.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
+                onEdit={editMode ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -305,16 +318,12 @@ export default function Monthly() {
               </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className="flex items-center justify-between py-1">
+            <div className={`flex items-center justify-between py-1 ${editMode ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
+              onClick={editMode ? () => toggleExpand('savings-goal') : undefined}>
               <span className="text-xs text-muted-foreground">Monthly savings goal</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{formatCOP(Number(savingsAmount) || 0)}</span>
-                <button onClick={() => toggleEdit('savings-goal')} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === 'savings-goal' ? 'text-primary' : ''}`}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <span className="text-sm font-medium">{formatCOP(Number(savingsAmount) || 0)}</span>
             </div>
-            {editingId === 'savings-goal' && (
+            {editMode && expandedId === 'savings-goal' && (
               <div className="pb-2 pt-1">
                 <Input type="number" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} onBlur={saveSavingsTarget} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Monthly savings goal" />
               </div>
@@ -328,12 +337,12 @@ export default function Monthly() {
             subtitle={formatCOP(totalDebt)}
             open={openSections.debt}
             onToggle={() => toggle('debt')}
-            onAdd={() => setShowAddDebt(true)}
+            onAdd={editMode ? () => setShowAddDebt(true) : undefined}
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
             {accounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={() => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name })}
-                onEdit={() => toggleEdit(acc.id)} expanded={editingId === acc.id}
+              <ItemRow key={acc.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+                onEdit={editMode ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateDebtAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -387,12 +396,12 @@ export default function Monthly() {
             subtitleColor="text-income"
             open={openSections.income}
             onToggle={() => toggle('income')}
-            onAdd={() => setShowAddIncome(true)}
+            onAdd={editMode ? () => setShowAddIncome(true) : undefined}
           >
             {incomeSources.length === 0 && <EmptyState text="No income sources" />}
             {incomeSources.map(src => (
-              <ItemRow key={src.id} onDelete={() => setDeleteConfirm({ type: 'income', id: src.id, name: src.name })}
-                onEdit={() => toggleEdit(src.id)} expanded={editingId === src.id}
+              <ItemRow key={src.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
+                onEdit={editMode ? () => toggleExpand(src.id) : undefined} expanded={expandedId === src.id}
                 editContent={
                   <div className="pb-3 pt-1 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={src.name} onBlur={e => { if (e.target.value !== src.name) store.updateIncomeSource(src.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -415,16 +424,12 @@ export default function Monthly() {
               </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className="flex items-center justify-between py-1">
+            <div className={`flex items-center justify-between py-1 ${editMode ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
+              onClick={editMode ? () => toggleExpand('side-income') : undefined}>
               <span className="text-sm text-muted-foreground">Side Income</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{formatCOP(Number(sideIncome) || 0)}</span>
-                <button onClick={() => toggleEdit('side-income')} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === 'side-income' ? 'text-primary' : ''}`}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <span className="text-sm font-medium">{formatCOP(Number(sideIncome) || 0)}</span>
             </div>
-            {editingId === 'side-income' && (
+            {editMode && expandedId === 'side-income' && (
               <div className="pb-2 pt-1">
                 <Input type="number" value={sideIncome} onChange={e => setSideIncome(e.target.value)} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Side income amount" />
               </div>
@@ -438,12 +443,12 @@ export default function Monthly() {
             subtitle={formatCOP(fixed)}
             open={openSections.expenses}
             onToggle={() => toggle('expenses')}
-            onAdd={() => setShowAddExpense(true)}
+            onAdd={editMode ? () => setShowAddExpense(true) : undefined}
           >
             {fixedExpenses.length === 0 && <EmptyState text="No fixed expenses yet" />}
             {fixedExpenses.map(exp => (
-              <ItemRow key={exp.id} onDelete={() => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name })}
-                onEdit={() => toggleEdit(exp.id)} expanded={editingId === exp.id}
+              <ItemRow key={exp.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
+                onEdit={editMode ? () => toggleExpand(exp.id) : undefined} expanded={expandedId === exp.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={exp.name} onBlur={e => { if (e.target.value !== exp.name) store.updateFixedExpense(exp.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -474,7 +479,7 @@ export default function Monthly() {
             subtitle={formatCOP(subsCost)}
             open={openSections.subscriptions}
             onToggle={() => toggle('subscriptions')}
-            onAdd={() => setShowAddSub(true)}
+            onAdd={editMode ? () => setShowAddSub(true) : undefined}
           >
             {subs.length === 0 && <EmptyState text="No subscriptions yet" />}
             {subGroups.map(([groupName, groupSubs]) => (
@@ -487,8 +492,8 @@ export default function Monthly() {
                   </span>
                 </div>
                 {groupSubs.map(sub => (
-                  <ItemRow key={sub.id} onDelete={() => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name })}
-                    onEdit={() => toggleEdit(sub.id)} expanded={editingId === sub.id}
+                  <ItemRow key={sub.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
+                    onEdit={editMode ? () => toggleExpand(sub.id) : undefined} expanded={expandedId === sub.id}
                     editContent={
                       <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
                         <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={sub.name} onBlur={e => { if (e.target.value !== sub.name) store.updateSubscription(sub.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -536,7 +541,7 @@ export default function Monthly() {
             subtitleColor="text-destructive"
             open={openSections.debtPayments}
             onToggle={() => toggle('debtPayments')}
-            onAdd={() => setShowAddDebt(true)}
+            onAdd={editMode ? () => setShowAddDebt(true) : undefined}
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
             {accounts.length > 0 && (
@@ -546,8 +551,8 @@ export default function Monthly() {
               </div>
             )}
             {accounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={() => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name })}
-                onEdit={() => toggleEdit(acc.id)} expanded={editingId === acc.id}
+              <ItemRow key={acc.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+                onEdit={editMode ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Monthly Payment</label><Input type="number" defaultValue={acc.monthlyPayment || 0} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.monthlyPayment) store.updateDebtAccount(acc.id, { monthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -797,7 +802,7 @@ function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggl
   subtitleColor?: string;
   open: boolean;
   onToggle: () => void;
-  onAdd: () => void;
+  onAdd?: () => void;
   children: React.ReactNode;
 }) {
   const Chevron = open ? ChevronUp : ChevronDown;
@@ -812,9 +817,11 @@ function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggl
           </button>
           <div className="flex items-center gap-2">
             <span className={`text-sm font-bold ${subtitleColor ?? ''}`}>{subtitle}</span>
-            <Button size="sm" variant="ghost" className="text-primary h-7 px-2" onClick={onAdd}>
-              <Plus className="w-3.5 h-3.5" />
-            </Button>
+            {onAdd && (
+              <Button size="sm" variant="ghost" className="text-primary h-7 px-2" onClick={onAdd}>
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -824,7 +831,7 @@ function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggl
 }
 
 function ItemRow({ onDelete, onEdit, expanded, editContent, children }: {
-  onDelete: () => void;
+  onDelete?: () => void;
   onEdit?: () => void;
   expanded?: boolean;
   editContent?: React.ReactNode;
@@ -832,18 +839,18 @@ function ItemRow({ onDelete, onEdit, expanded, editContent, children }: {
 }) {
   return (
     <div className="border-b border-border/50 last:border-0">
-      <div className="flex items-center justify-between py-2 gap-2">
+      <div
+        className={`flex items-center justify-between py-2 gap-2 ${onEdit ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded transition-colors' : ''}`}
+        onClick={onEdit}
+      >
         <div className="flex items-center justify-between gap-2 flex-1 min-w-0">{children}</div>
-        <div className="flex items-center gap-1 shrink-0">
-          {onEdit && (
-            <button onClick={onEdit} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${expanded ? 'text-primary' : ''}`}>
-              <Pencil className="w-3.5 h-3.5" />
+        {onDelete && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={e => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-muted-foreground hover:text-destructive">
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
-          )}
-          <button onClick={onDelete} className="p-1.5 text-muted-foreground hover:text-destructive">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
       {expanded && editContent}
     </div>
