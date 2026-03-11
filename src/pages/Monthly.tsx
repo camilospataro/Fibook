@@ -46,9 +46,12 @@ export default function Monthly() {
     });
   }
 
+  // Tab view
+  const [activeTab, setActiveTab] = useState<'balances' | 'commitments'>('balances');
+
   // Collapsible sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    expenses: true, subscriptions: true, debt: true, checking: true, income: true,
+    expenses: true, subscriptions: true, debt: true, checking: true, income: true, debtPayments: true,
   });
   const toggle = (key: string) => setOpenSections(p => ({ ...p, [key]: !p[key] }));
 
@@ -268,310 +271,404 @@ export default function Monthly() {
         </div>
       </div>
 
-      {/* Checking Accounts */}
-      <SectionCard
-        icon={Landmark}
-        title="Checking Accounts"
-        subtitle={formatCOP(totalChecking)}
-        subtitleColor="text-primary"
-        open={openSections.checking}
-        onToggle={() => toggle('checking')}
-        onAdd={() => setShowAddChecking(true)}
-      >
-        {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
-        {checkingAccounts.map(acc => (
-          <div key={acc.id} className="border-b border-border/50 last:border-0">
-            <div className="flex items-center justify-between py-2 gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
-                <span className="text-sm truncate">{acc.name}</span>
-                <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <MoneyInput
-                  value={String(acc.currentBalance)}
-                  onChange={v => store.updateCheckingAccount(acc.id, { currentBalance: Number(v) || 0 })}
-                  onBlur={() => {}}
-                />
-                <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            {editingId === acc.id && (
-              <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
-                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Currency</label>
-                  <Select value={acc.currency} onValueChange={v => store.updateCheckingAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
-                <div><label className="text-[10px] text-muted-foreground">Color</label>
-                  <div className="flex gap-1 flex-wrap pt-1">{CHECKING_COLORS.map(c => (<button key={c} onClick={() => store.updateCheckingAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
-              </div>
-            )}
-          </div>
-        ))}
-        <Separator className="my-2" />
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Monthly savings goal</span>
-          <MoneyInput
-            value={savingsAmount}
-            onChange={setSavingsAmount}
-            onBlur={saveSavingsTarget}
-          />
-        </div>
-      </SectionCard>
+      {/* Tab Toggle */}
+      <div className="flex rounded-lg bg-secondary/50 p-1 gap-1">
+        <button
+          onClick={() => setActiveTab('balances')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'balances'
+              ? 'bg-card text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Landmark className="w-4 h-4" />
+          Balances
+        </button>
+        <button
+          onClick={() => setActiveTab('commitments')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'commitments'
+              ? 'bg-card text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Repeat className="w-4 h-4" />
+          Commitments
+        </button>
+      </div>
 
-      {/* Income */}
-      <SectionCard
-        icon={DollarSign}
-        title="Income"
-        subtitle={formatCOP(totalIncome)}
-        subtitleColor="text-income"
-        open={openSections.income}
-        onToggle={() => toggle('income')}
-        onAdd={() => setShowAddIncome(true)}
-      >
-        {incomeSources.length === 0 && <EmptyState text="No income sources" />}
-        {incomeSources.map(src => (
-          <div key={src.id} className="border-b border-border/50 last:border-0">
-            <div className="flex items-center gap-3 py-2">
-              <div className="flex-1 min-w-0 flex items-center gap-2">
-                <span className="text-sm truncate">{src.name}</span>
-                {src.isRecurring && <Badge variant="secondary" className="text-[10px]">Recurring</Badge>}
-                <Badge variant="outline" className="text-[10px]">{src.currency}</Badge>
-              </div>
-              <MoneyInput
-                value={incomeAmounts[src.id] ?? ''}
-                onChange={v => setIncomeAmounts(p => ({ ...p, [src.id]: v }))}
-                onBlur={() => saveIncomeAmount(src.id)}
-              />
-              <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => toggleEdit(src.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === src.id ? 'text-primary' : ''}`}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setDeleteConfirm({ type: 'income', id: src.id, name: src.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            {editingId === src.id && (
-              <div className="pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={src.name} onBlur={e => { if (e.target.value !== src.name) store.updateIncomeSource(src.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Currency</label>
-                  <Select value={src.currency} onValueChange={v => store.updateIncomeSource(src.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
-                <div className="sm:col-span-2 flex items-center gap-2"><Switch checked={src.isRecurring} onCheckedChange={v => store.updateIncomeSource(src.id, { isRecurring: v })} /><label className="text-xs text-muted-foreground">Recurring</label></div>
-                <div><label className="text-[10px] text-muted-foreground">Deposit To</label>
-                  <Select value={src.linkedAccountId ?? 'none'} onValueChange={v => store.updateIncomeSource(src.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
-                <div><label className="text-[10px] text-muted-foreground">Deposit Day</label><Input type="number" min="1" max="31" defaultValue={src.depositDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== src.depositDay) store.updateIncomeSource(src.id, { depositDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-              </div>
-            )}
-          </div>
-        ))}
-        <Separator className="my-2" />
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground flex-1">Side Income</span>
-          <Input
-            type="number"
-            value={sideIncome}
-            onChange={e => setSideIncome(e.target.value)}
-            className="w-32 bg-secondary border-border text-right text-sm h-8"
-          />
-          <div className="w-3.5" />
-        </div>
-      </SectionCard>
-
-      {/* Fixed Expenses */}
-      <SectionCard
-        icon={Receipt}
-        title="Fixed Expenses"
-        subtitle={formatCOP(fixed)}
-        open={openSections.expenses}
-        onToggle={() => toggle('expenses')}
-        onAdd={() => setShowAddExpense(true)}
-      >
-        {fixedExpenses.length === 0 && <EmptyState text="No fixed expenses yet" />}
-        {fixedExpenses.map(exp => (
-          <ItemRow key={exp.id} onDelete={() => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name })}
-            onEdit={() => toggleEdit(exp.id)} expanded={editingId === exp.id}
-            editContent={
-              <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
-                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={exp.name} onBlur={e => { if (e.target.value !== exp.name) store.updateFixedExpense(exp.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={exp.amount} onBlur={e => { const v = Number(e.target.value); if (v !== exp.amount) store.updateFixedExpense(exp.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Currency</label>
-                  <Select value={exp.currency} onValueChange={v => store.updateFixedExpense(exp.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
-                <div><label className="text-[10px] text-muted-foreground">Category</label>
-                  <Select value={exp.category} onValueChange={v => store.updateFixedExpense(exp.id, { category: v as ExpenseCategory })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></div>
-                <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
-                  <Select value={exp.linkedAccountId ?? 'none'} onValueChange={v => store.updateFixedExpense(exp.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
-              </div>
-            }
+      {/* ==================== BALANCES TAB ==================== */}
+      {activeTab === 'balances' && (
+        <div className="space-y-4">
+          {/* Checking Accounts */}
+          <SectionCard
+            icon={Landmark}
+            title="Checking Accounts"
+            subtitle={formatCOP(totalChecking)}
+            subtitleColor="text-primary"
+            open={openSections.checking}
+            onToggle={() => toggle('checking')}
+            onAdd={() => setShowAddChecking(true)}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm truncate">{exp.name}</span>
-              <Badge variant="secondary" className="text-[10px] shrink-0">{exp.category}</Badge>
-              <Badge variant="outline" className="text-[10px] shrink-0">{exp.currency}</Badge>
-            </div>
-            <span className="text-sm font-medium shrink-0">{formatCurrency(exp.amount, exp.currency)}</span>
-          </ItemRow>
-        ))}
-      </SectionCard>
-
-      {/* Debt Accounts */}
-      <SectionCard
-        icon={CreditCard}
-        title="Debt Accounts"
-        subtitle={formatCOP(totalDebt)}
-        open={openSections.debt}
-        onToggle={() => toggle('debt')}
-        onAdd={() => setShowAddDebt(true)}
-      >
-        {accounts.length === 0 && <EmptyState text="No debt accounts" />}
-        {accounts.length > 0 && (
-          <div className="flex justify-between mb-1">
-            <span className="text-[10px] text-muted-foreground">Min: {formatCOP(debtMin)}/mo</span>
-            <span className="text-[10px] text-muted-foreground">Paid this month: {formatCOP(debtPaid)}</span>
-          </div>
-        )}
-        {accounts.map(acc => (
-          <div key={acc.id} className="border-b border-border/50 last:border-0">
-            <div className="flex items-center justify-between py-2 gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
-                <div className="min-w-0">
-                  <span className="text-sm truncate block">{acc.name}</span>
-                  <span className="text-[11px] text-muted-foreground">{formatCurrency(Number(debtBalances[acc.id]) || acc.currentBalance, acc.currency)}</span>
+            {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
+            {checkingAccounts.map(acc => (
+              <div key={acc.id} className="border-b border-border/50 last:border-0">
+                <div className="flex items-center justify-between py-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
+                    <span className="text-sm truncate">{acc.name}</span>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <MoneyInput
+                      value={String(acc.currentBalance)}
+                      onChange={v => store.updateCheckingAccount(acc.id, { currentBalance: Number(v) || 0 })}
+                      onBlur={() => {}}
+                    />
+                    <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
+                {editingId === acc.id && (
+                  <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                    <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Currency</label>
+                      <Select value={acc.currency} onValueChange={v => store.updateCheckingAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                    <div><label className="text-[10px] text-muted-foreground">Color</label>
+                      <div className="flex gap-1 flex-wrap pt-1">{CHECKING_COLORS.map(c => (<button key={c} onClick={() => store.updateCheckingAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <MoneyInput
-                  value={ccPayments[acc.id] ?? '0'}
-                  onChange={v => setCcPayments(p => ({ ...p, [acc.id]: v }))}
-                  onBlur={() => saveCcPayment(acc.id)}
-                />
-                <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+            ))}
+            <Separator className="my-2" />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Monthly savings goal</span>
+              <MoneyInput
+                value={savingsAmount}
+                onChange={setSavingsAmount}
+                onBlur={saveSavingsTarget}
+              />
             </div>
-            {editingId === acc.id && (
-              <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
-                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateDebtAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Balance</label><Input type="number" defaultValue={debtBalances[acc.id] ?? acc.currentBalance} onBlur={e => { const v = e.target.value; setDebtBalances(p => ({ ...p, [acc.id]: v })); saveDebtBalance(acc.id); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Min. Payment</label><Input type="number" defaultValue={acc.minimumMonthlyPayment} onBlur={e => { const v = Number(e.target.value); if (v !== acc.minimumMonthlyPayment) store.updateDebtAccount(acc.id, { minimumMonthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                <div><label className="text-[10px] text-muted-foreground">Currency</label>
-                  <Select value={acc.currency} onValueChange={v => store.updateDebtAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
-                <div><label className="text-[10px] text-muted-foreground">Color</label>
-                  <div className="flex gap-1 flex-wrap pt-1">{DEBT_COLORS.map(c => (<button key={c} onClick={() => store.updateDebtAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
-                <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
-                  <Select value={acc.linkedAccountId ?? 'none'} onValueChange={v => store.updateDebtAccount(acc.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
-              </div>
-            )}
-          </div>
-        ))}
-      </SectionCard>
+          </SectionCard>
 
-      {/* Subscriptions */}
-      <SectionCard
-        icon={Repeat}
-        title="Subscriptions"
-        subtitle={formatCOP(subsCost)}
-        open={openSections.subscriptions}
-        onToggle={() => toggle('subscriptions')}
-        onAdd={() => setShowAddSub(true)}
-      >
-        {subs.length === 0 && <EmptyState text="No subscriptions yet" />}
-        {subGroups.map(([groupName, groupSubs]) => (
-          <div key={groupName}>
-            <div className="flex items-center gap-2 mt-2 mb-1 first:mt-0">
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{groupName}</span>
-              <div className="flex-1 h-px bg-border/50" />
-              <span className="text-[11px] text-muted-foreground">
-                {formatCOP(groupSubs.filter(s => s.active).reduce((sum, s) => sum + (s.currency === 'USD' ? s.amount * exchangeRate : s.amount), 0))}
-              </span>
+          {/* Debt Balances */}
+          <SectionCard
+            icon={CreditCard}
+            title="Debt Balances"
+            subtitle={formatCOP(totalDebt)}
+            open={openSections.debt}
+            onToggle={() => toggle('debt')}
+            onAdd={() => setShowAddDebt(true)}
+          >
+            {accounts.length === 0 && <EmptyState text="No debt accounts" />}
+            {accounts.map(acc => (
+              <div key={acc.id} className="border-b border-border/50 last:border-0">
+                <div className="flex items-center justify-between py-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
+                    <span className="text-sm truncate">{acc.name}</span>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <MoneyInput
+                      value={debtBalances[acc.id] ?? String(acc.currentBalance)}
+                      onChange={v => setDebtBalances(p => ({ ...p, [acc.id]: v }))}
+                      onBlur={() => saveDebtBalance(acc.id)}
+                    />
+                    <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                {editingId === acc.id && (
+                  <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                    <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateDebtAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Currency</label>
+                      <Select value={acc.currency} onValueChange={v => store.updateDebtAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                    <div><label className="text-[10px] text-muted-foreground">Color</label>
+                      <div className="flex gap-1 flex-wrap pt-1">{DEBT_COLORS.map(c => (<button key={c} onClick={() => store.updateDebtAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </SectionCard>
+
+          {/* Net Worth Summary */}
+          <Card className="bg-card border-primary/20 border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Balance Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
+              <SummaryRow label="Total Debt" value={formatCOP(totalDebt)} color="text-destructive" />
+              <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
+              <Separator />
+              <div className="flex justify-between font-bold text-sm pt-1">
+                <span>Net Position</span>
+                <span className={totalChecking - totalDebt >= 0 ? 'text-income' : 'text-destructive'}>
+                  {formatCOP(totalChecking - totalDebt)}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ==================== COMMITMENTS TAB ==================== */}
+      {activeTab === 'commitments' && (
+        <div className="space-y-4">
+          {/* Income */}
+          <SectionCard
+            icon={DollarSign}
+            title="Income"
+            subtitle={formatCOP(totalIncome)}
+            subtitleColor="text-income"
+            open={openSections.income}
+            onToggle={() => toggle('income')}
+            onAdd={() => setShowAddIncome(true)}
+          >
+            {incomeSources.length === 0 && <EmptyState text="No income sources" />}
+            {incomeSources.map(src => (
+              <div key={src.id} className="border-b border-border/50 last:border-0">
+                <div className="flex items-center gap-3 py-2">
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className="text-sm truncate">{src.name}</span>
+                    {src.isRecurring && <Badge variant="secondary" className="text-[10px]">Recurring</Badge>}
+                    <Badge variant="outline" className="text-[10px]">{src.currency}</Badge>
+                  </div>
+                  <MoneyInput
+                    value={incomeAmounts[src.id] ?? ''}
+                    onChange={v => setIncomeAmounts(p => ({ ...p, [src.id]: v }))}
+                    onBlur={() => saveIncomeAmount(src.id)}
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => toggleEdit(src.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === src.id ? 'text-primary' : ''}`}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setDeleteConfirm({ type: 'income', id: src.id, name: src.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                {editingId === src.id && (
+                  <div className="pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={src.name} onBlur={e => { if (e.target.value !== src.name) store.updateIncomeSource(src.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Currency</label>
+                      <Select value={src.currency} onValueChange={v => store.updateIncomeSource(src.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                    <div className="sm:col-span-2 flex items-center gap-2"><Switch checked={src.isRecurring} onCheckedChange={v => store.updateIncomeSource(src.id, { isRecurring: v })} /><label className="text-xs text-muted-foreground">Recurring</label></div>
+                    <div><label className="text-[10px] text-muted-foreground">Deposit To</label>
+                      <Select value={src.linkedAccountId ?? 'none'} onValueChange={v => store.updateIncomeSource(src.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div><label className="text-[10px] text-muted-foreground">Deposit Day</label><Input type="number" min="1" max="31" defaultValue={src.depositDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== src.depositDay) store.updateIncomeSource(src.id, { depositDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                  </div>
+                )}
+              </div>
+            ))}
+            <Separator className="my-2" />
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground flex-1">Side Income</span>
+              <Input
+                type="number"
+                value={sideIncome}
+                onChange={e => setSideIncome(e.target.value)}
+                className="w-32 bg-secondary border-border text-right text-sm h-8"
+              />
+              <div className="w-3.5" />
             </div>
-            {groupSubs.map(sub => (
-              <ItemRow key={sub.id} onDelete={() => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name })}
-                onEdit={() => toggleEdit(sub.id)} expanded={editingId === sub.id}
+          </SectionCard>
+
+          {/* Fixed Expenses */}
+          <SectionCard
+            icon={Receipt}
+            title="Fixed Expenses"
+            subtitle={formatCOP(fixed)}
+            open={openSections.expenses}
+            onToggle={() => toggle('expenses')}
+            onAdd={() => setShowAddExpense(true)}
+          >
+            {fixedExpenses.length === 0 && <EmptyState text="No fixed expenses yet" />}
+            {fixedExpenses.map(exp => (
+              <ItemRow key={exp.id} onDelete={() => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name })}
+                onEdit={() => toggleEdit(exp.id)} expanded={editingId === exp.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
-                    <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={sub.name} onBlur={e => { if (e.target.value !== sub.name) store.updateSubscription(sub.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                    <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={sub.amount} onBlur={e => { const v = Number(e.target.value); if (v !== sub.amount) store.updateSubscription(sub.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={exp.name} onBlur={e => { if (e.target.value !== exp.name) store.updateFixedExpense(exp.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={exp.amount} onBlur={e => { const v = Number(e.target.value); if (v !== exp.amount) store.updateFixedExpense(exp.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
-                      <Select value={sub.currency} onValueChange={v => store.updateSubscription(sub.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
-                    <div><label className="text-[10px] text-muted-foreground">Group</label>
-                      <div className="flex gap-1.5">
-                        <Select value={existingGroups.includes(sub.group) ? sub.group : '__custom'} onValueChange={v => { if (v !== '__custom') store.updateSubscription(sub.id, { group: v }); else store.updateSubscription(sub.id, { group: '' }); }}>
-                          <SelectTrigger className="h-7 text-xs bg-secondary border-border flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>{existingGroups.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}<SelectItem value="__custom">+ New group</SelectItem></SelectContent>
-                        </Select>
-                        {!existingGroups.includes(sub.group) && (
-                          <Input defaultValue={sub.group} onBlur={e => { const v = e.target.value.trim() || 'General'; if (v !== sub.group) store.updateSubscription(sub.id, { group: v }); }} placeholder="Group name" className="h-7 text-xs bg-secondary border-border flex-1" />
-                        )}
-                      </div></div>
+                      <Select value={exp.currency} onValueChange={v => store.updateFixedExpense(exp.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                    <div><label className="text-[10px] text-muted-foreground">Category</label>
+                      <Select value={exp.category} onValueChange={v => store.updateFixedExpense(exp.id, { category: v as ExpenseCategory })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></div>
                     <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
-                      <Select value={sub.linkedAccountId ?? 'none'} onValueChange={v => store.updateSubscription(sub.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
+                      <Select value={exp.linkedAccountId ?? 'none'} onValueChange={v => store.updateFixedExpense(exp.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                 }
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <Switch
-                    checked={sub.active}
-                    onCheckedChange={active => store.updateSubscription(sub.id, { active })}
-                    className="scale-75"
-                  />
-                  <span className={`text-sm truncate ${!sub.active ? 'text-muted-foreground line-through' : ''}`}>{sub.name}</span>
-                  <Badge variant="secondary" className="text-[10px] shrink-0">{sub.currency}</Badge>
+                  <span className="text-sm truncate">{exp.name}</span>
+                  <Badge variant="secondary" className="text-[10px] shrink-0">{exp.category}</Badge>
+                  <Badge variant="outline" className="text-[10px] shrink-0">{exp.currency}</Badge>
                 </div>
-                <span className={`text-sm font-medium shrink-0 ${!sub.active ? 'text-muted-foreground' : ''}`}>
-                  {formatCurrency(sub.amount, sub.currency)}
-                </span>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(exp.amount, exp.currency)}</span>
               </ItemRow>
             ))}
-          </div>
-        ))}
-      </SectionCard>
+          </SectionCard>
 
-      {/* CC Charges */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-warning" />
-              New CC Charges
-            </CardTitle>
-            <span className="text-warning font-bold text-sm">{formatCOP(ccCharges)}</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-muted-foreground">Auto-calculated from credit card spending this month.</p>
-        </CardContent>
-      </Card>
+          {/* Subscriptions */}
+          <SectionCard
+            icon={Repeat}
+            title="Subscriptions"
+            subtitle={formatCOP(subsCost)}
+            open={openSections.subscriptions}
+            onToggle={() => toggle('subscriptions')}
+            onAdd={() => setShowAddSub(true)}
+          >
+            {subs.length === 0 && <EmptyState text="No subscriptions yet" />}
+            {subGroups.map(([groupName, groupSubs]) => (
+              <div key={groupName}>
+                <div className="flex items-center gap-2 mt-2 mb-1 first:mt-0">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{groupName}</span>
+                  <div className="flex-1 h-px bg-border/50" />
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatCOP(groupSubs.filter(s => s.active).reduce((sum, s) => sum + (s.currency === 'USD' ? s.amount * exchangeRate : s.amount), 0))}
+                  </span>
+                </div>
+                {groupSubs.map(sub => (
+                  <ItemRow key={sub.id} onDelete={() => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name })}
+                    onEdit={() => toggleEdit(sub.id)} expanded={editingId === sub.id}
+                    editContent={
+                      <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
+                        <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={sub.name} onBlur={e => { if (e.target.value !== sub.name) store.updateSubscription(sub.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                        <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={sub.amount} onBlur={e => { const v = Number(e.target.value); if (v !== sub.amount) store.updateSubscription(sub.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                        <div><label className="text-[10px] text-muted-foreground">Currency</label>
+                          <Select value={sub.currency} onValueChange={v => store.updateSubscription(sub.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                        <div><label className="text-[10px] text-muted-foreground">Group</label>
+                          <div className="flex gap-1.5">
+                            <Select value={existingGroups.includes(sub.group) ? sub.group : '__custom'} onValueChange={v => { if (v !== '__custom') store.updateSubscription(sub.id, { group: v }); else store.updateSubscription(sub.id, { group: '' }); }}>
+                              <SelectTrigger className="h-7 text-xs bg-secondary border-border flex-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>{existingGroups.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}<SelectItem value="__custom">+ New group</SelectItem></SelectContent>
+                            </Select>
+                            {!existingGroups.includes(sub.group) && (
+                              <Input defaultValue={sub.group} onBlur={e => { const v = e.target.value.trim() || 'General'; if (v !== sub.group) store.updateSubscription(sub.id, { group: v }); }} placeholder="Group name" className="h-7 text-xs bg-secondary border-border flex-1" />
+                            )}
+                          </div></div>
+                        <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
+                          <Select value={sub.linkedAccountId ?? 'none'} onValueChange={v => store.updateSubscription(sub.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
+                      </div>
+                    }
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Switch
+                        checked={sub.active}
+                        onCheckedChange={active => store.updateSubscription(sub.id, { active })}
+                        className="scale-75"
+                      />
+                      <span className={`text-sm truncate ${!sub.active ? 'text-muted-foreground line-through' : ''}`}>{sub.name}</span>
+                      <Badge variant="secondary" className="text-[10px] shrink-0">{sub.currency}</Badge>
+                    </div>
+                    <span className={`text-sm font-medium shrink-0 ${!sub.active ? 'text-muted-foreground' : ''}`}>
+                      {formatCurrency(sub.amount, sub.currency)}
+                    </span>
+                  </ItemRow>
+                ))}
+              </div>
+            ))}
+          </SectionCard>
 
-      {/* Summary */}
-      <Card className="bg-card border-primary/20 border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Month Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <SummaryRow label="Total Income" value={formatCOP(totalIncome)} color="text-income" />
-          <SummaryRow label="Fixed Expenses" value={formatCOP(fixed)} />
-          <SummaryRow label="Subscriptions" value={formatCOP(subsCost)} />
-          <SummaryRow label="Variable Spending" value={formatCOP(totalSpending)} />
-          <SummaryRow label="Debt Min. Payments" value={formatCOP(debtMin)} />
-          <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
-          <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
-          <Separator />
-          <div className="flex justify-between font-bold text-sm pt-1">
-            <span>Balance</span>
-            <span className={balance >= 0 ? 'text-income' : 'text-destructive'}>{formatCOP(balance)}</span>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Debt Payments */}
+          <SectionCard
+            icon={CreditCard}
+            title="Debt Payments"
+            subtitle={formatCOP(debtPaid)}
+            subtitleColor="text-destructive"
+            open={openSections.debtPayments}
+            onToggle={() => toggle('debtPayments')}
+            onAdd={() => setShowAddDebt(true)}
+          >
+            {accounts.length === 0 && <EmptyState text="No debt accounts" />}
+            {accounts.length > 0 && (
+              <div className="flex justify-between mb-1">
+                <span className="text-[10px] text-muted-foreground">Min required: {formatCOP(debtMin)}/mo</span>
+                <span className="text-[10px] text-muted-foreground">Paid: {formatCOP(debtPaid)}</span>
+              </div>
+            )}
+            {accounts.map(acc => (
+              <div key={acc.id} className="border-b border-border/50 last:border-0">
+                <div className="flex items-center justify-between py-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
+                    <div className="min-w-0">
+                      <span className="text-sm truncate block">{acc.name}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Min: {formatCurrency(acc.minimumMonthlyPayment, acc.currency)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <MoneyInput
+                      value={ccPayments[acc.id] ?? '0'}
+                      onChange={v => setCcPayments(p => ({ ...p, [acc.id]: v }))}
+                      onBlur={() => saveCcPayment(acc.id)}
+                    />
+                    <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                {editingId === acc.id && (
+                  <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                    <div><label className="text-[10px] text-muted-foreground">Min. Payment</label><Input type="number" defaultValue={acc.minimumMonthlyPayment} onBlur={e => { const v = Number(e.target.value); if (v !== acc.minimumMonthlyPayment) store.updateDebtAccount(acc.id, { minimumMonthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    <div><label className="text-[10px] text-muted-foreground">Pay From</label>
+                      <Select value={acc.linkedAccountId ?? 'none'} onValueChange={v => store.updateDebtAccount(acc.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </SectionCard>
+
+          {/* CC Charges */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-warning" />
+                  New CC Charges
+                </CardTitle>
+                <span className="text-warning font-bold text-sm">{formatCOP(ccCharges)}</span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Auto-calculated from credit card spending this month.</p>
+            </CardContent>
+          </Card>
+
+          {/* Month Summary */}
+          <Card className="bg-card border-primary/20 border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Month Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <SummaryRow label="Total Income" value={formatCOP(totalIncome)} color="text-income" />
+              <SummaryRow label="Fixed Expenses" value={formatCOP(fixed)} />
+              <SummaryRow label="Subscriptions" value={formatCOP(subsCost)} />
+              <SummaryRow label="Variable Spending" value={formatCOP(totalSpending)} />
+              <SummaryRow label="Debt Min. Payments" value={formatCOP(debtMin)} />
+              <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
+              <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
+              <Separator />
+              <div className="flex justify-between font-bold text-sm pt-1">
+                <span>Balance</span>
+                <span className={balance >= 0 ? 'text-income' : 'text-destructive'}>{formatCOP(balance)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Button onClick={() => setShowRecap(true)} variant="secondary" className="w-full" size="lg">
         View Month Recap
