@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
 
   if (!ANTHROPIC_API_KEY) {
     return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }),
+      JSON.stringify({ error: "ANTHROPIC_API_KEY not configured", actions: [] }),
       {
-        status: 500,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
@@ -108,10 +108,11 @@ Rules:
     if (!response.ok) {
       return new Response(
         JSON.stringify({
-          error: data.error?.message ?? "Claude API error",
+          error: data.error?.message ?? `Claude API error (${response.status})`,
+          actions: [],
         }),
         {
-          status: response.status,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -125,9 +126,9 @@ Rules:
       parsed = JSON.parse(text);
     } catch {
       return new Response(
-        JSON.stringify({ error: "Failed to parse AI response", raw: text }),
+        JSON.stringify({ error: "Failed to parse AI response", actions: [] }),
         {
-          status: 500,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -138,9 +139,9 @@ Rules:
     });
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: (err as Error).message }),
+      JSON.stringify({ error: (err as Error).message, actions: [] }),
       {
-        status: 500,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

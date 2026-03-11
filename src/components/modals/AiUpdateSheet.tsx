@@ -118,7 +118,16 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
       });
 
       if (fnError) {
-        setError(fnError.message || 'Failed to process request');
+        // Try to extract body from FunctionsHttpError
+        let msg = fnError.message || 'Failed to process request';
+        try {
+          const context = (fnError as unknown as { context?: { json?: () => Promise<unknown> } }).context;
+          if (context?.json) {
+            const body = await context.json() as Record<string, string>;
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* ignore */ }
+        setError(msg);
       } else if (data?.error) {
         setError(data.error);
       } else if (data?.actions?.length > 0) {
@@ -126,8 +135,8 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
       } else {
         setError("Couldn't understand what to update. Try being more specific.");
       }
-    } catch {
-      setError('Could not connect to AI service');
+    } catch (err) {
+      setError(`Could not connect to AI service: ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }
