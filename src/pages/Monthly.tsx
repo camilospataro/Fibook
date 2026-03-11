@@ -14,8 +14,6 @@ import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatCurrency, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
 import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP } from '@/lib/calculations';
 import { toast } from 'sonner';
-import MoneyFlowSankey from '@/components/charts/MoneyFlowSankey';
-import MoneyWaterfall from '@/components/charts/MoneyWaterfall';
 import type { ExpenseCategory } from '@/types';
 
 const DEBT_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
@@ -48,7 +46,6 @@ export default function Monthly() {
 
   // Tab view
   const [activeTab, setActiveTab] = useState<'balances' | 'movements'>('balances');
-  const [flowView, setFlowView] = useState<'sankey' | 'waterfall'>('sankey');
 
   // Collapsible sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -382,56 +379,6 @@ export default function Monthly() {
       {/* ==================== MOVEMENTS TAB ==================== */}
       {activeTab === 'movements' && (
         <div className="space-y-4">
-          {/* Flow Chart Toggle */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFlowView('sankey')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                flowView === 'sankey' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Flow
-            </button>
-            <button
-              onClick={() => setFlowView('waterfall')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                flowView === 'waterfall' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Waterfall
-            </button>
-          </div>
-
-          {/* Flow Charts */}
-          {flowView === 'sankey' ? (
-            <MoneyFlowSankey
-              incomeSources={incomeSources}
-              incomeAmounts={incomeAmounts}
-              sideIncome={Number(sideIncome) || 0}
-              fixedExpenses={fixedExpenses}
-              subscriptions={subs}
-              debtAccounts={accounts}
-              ccPayments={ccPayments}
-              checkingAccounts={checkingAccounts}
-              savingsGoal={Number(savingsAmount) || 0}
-              variableSpending={totalSpending}
-              exchangeRate={exchangeRate}
-            />
-          ) : (
-            <MoneyWaterfall
-              incomeSources={incomeSources}
-              incomeAmounts={incomeAmounts}
-              sideIncome={Number(sideIncome) || 0}
-              fixedExpenses={fixedExpenses}
-              subscriptions={subs}
-              debtAccounts={accounts}
-              ccPayments={ccPayments}
-              savingsGoal={Number(savingsAmount) || 0}
-              variableSpending={totalSpending}
-              exchangeRate={exchangeRate}
-            />
-          )}
-
           {/* Income */}
           <SectionCard
             icon={DollarSign}
