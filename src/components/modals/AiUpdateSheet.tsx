@@ -37,7 +37,7 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const debtAccounts = useFinanceStore(s => s.debtAccounts);
-  const savingsAccounts = useFinanceStore(s => s.savingsAccounts);
+  const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
   const incomeSources = useFinanceStore(s => s.incomeSources);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
   const subscriptions = useFinanceStore(s => s.subscriptions);
@@ -45,7 +45,7 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
   const settings = useFinanceStore(s => s.settings);
 
   const updateDebtAccount = useFinanceStore(s => s.updateDebtAccount);
-  const updateSavingsAccount = useFinanceStore(s => s.updateSavingsAccount);
+  const updateCheckingAccount = useFinanceStore(s => s.updateCheckingAccount);
   const updateIncomeSource = useFinanceStore(s => s.updateIncomeSource);
   const updateFixedExpense = useFinanceStore(s => s.updateFixedExpense);
   const updateSubscription = useFinanceStore(s => s.updateSubscription);
@@ -84,7 +84,7 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
         currentBalance: a.currentBalance,
         monthlyPayment: a.monthlyPayment,
       })),
-      savingsAccounts: savingsAccounts.map(a => ({
+      checkingAccounts: checkingAccounts.map(a => ({
         id: a.id,
         name: a.name,
         currency: a.currency,
@@ -164,9 +164,9 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
               await updateDebtAccount(action.id, action.updates as Partial<import('@/types').DebtAccount>);
             }
             break;
-          case 'updateSavingsAccount':
+          case 'updateCheckingAccount':
             if (action.id && action.updates) {
-              await updateSavingsAccount(action.id, action.updates as Partial<import('@/types').SavingsAccount>);
+              await updateCheckingAccount(action.id, action.updates as Partial<import('@/types').CheckingAccount>);
             }
             break;
           case 'updateIncomeSource':
@@ -221,8 +221,8 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
 
   function describeAction(action: Action): string {
     switch (action.type) {
-      case 'updateSavingsAccount': {
-        const sa = savingsAccounts.find(a => a.id === action.id);
+      case 'updateCheckingAccount': {
+        const sa = checkingAccounts.find(a => a.id === action.id);
         const saName = sa?.name ?? 'Unknown account';
         const bal = action.updates?.currentBalance;
         return typeof bal === 'number' ? `${saName}: balance → ${formatCOP(bal)}` : `Update ${saName}`;

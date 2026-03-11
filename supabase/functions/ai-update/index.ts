@@ -65,13 +65,13 @@ Return a JSON object with this exact structure:
       "updates": { "amount": <number>, "active": <boolean> }
     },
     {
-      "type": "updateSavingsAccount",
+      "type": "updateCheckingAccount",
       "id": "<account id>",
       "updates": { "currentBalance": <number> }
     },
     {
       "type": "addSpending",
-      "data": { "date": "YYYY-MM-DD", "description": "<string>", "amount": <number>, "category": "<groceries|transport|food|entertainment|health|shopping|other>", "paymentMethod": "<cash|debit|credit_mastercard_cop|credit_mastercard_usd|credit_visa>" }
+      "data": { "date": "YYYY-MM-DD", "description": "<string>", "amount": <number>, "category": "<groceries|transport|food|entertainment|health|shopping|other>", "paymentMethod": "<cash|debit|credit_mastercard_cop|credit_mastercard_usd|credit_visa|checking_ACCOUNT_ID>" }
     }
   ],
   "summary": "Brief human-readable summary of what will be updated"
@@ -81,7 +81,8 @@ Rules:
 - All monetary amounts in COP unless the user specifies USD
 - Match account/expense/income names to IDs from the provided data (fuzzy match is OK)
 - For snapshot updates, use the current month (provided in data) unless user specifies otherwise
-- If the user mentions a specific savings account balance (e.g. "I have 5M in Bancolombia"), update the savingsAccount's currentBalance
+- If the user mentions a specific checking account balance (e.g. "I have 5M in Bancolombia"), update the checkingAccount's currentBalance
+- For spending with a checking account payment, use "checking_<account_id>" as the paymentMethod (match by account name)
 - If the user mentions cash on hand, update the snapshot's "cashOnHand" field
 - Only include actions you're confident about. If something is ambiguous, mention it in the summary
 - Return ONLY valid JSON, no markdown, no code fences, no extra text

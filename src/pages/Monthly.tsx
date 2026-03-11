@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import type { ExpenseCategory } from '@/types';
 
 const DEBT_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
-const SAVINGS_COLORS = ['#00D4AA', '#4ECDC4', '#45B7D1', '#96CEB4', '#4F8EF7', '#FBBF24', '#DDA0DD', '#F7DC6F'];
+const CHECKING_COLORS = ['#00D4AA', '#4ECDC4', '#45B7D1', '#96CEB4', '#4F8EF7', '#FBBF24', '#DDA0DD', '#F7DC6F'];
 const expenseCategories: { value: ExpenseCategory; label: string }[] = [
   { value: 'housing', label: 'Housing' }, { value: 'food', label: 'Food' },
   { value: 'transport', label: 'Transport' }, { value: 'entertainment', label: 'Entertainment' },
@@ -26,7 +26,7 @@ const expenseCategories: { value: ExpenseCategory; label: string }[] = [
 
 export default function Monthly() {
   const store = useFinanceStore();
-  const { debtAccounts: accounts, savingsAccounts, incomeSources, fixedExpenses, subscriptions: subs, spending } = store;
+  const { debtAccounts: accounts, checkingAccounts, incomeSources, fixedExpenses, subscriptions: subs, spending } = store;
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
   const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
   const saveSnapshot = useFinanceStore(s => s.saveSnapshot);
@@ -48,7 +48,7 @@ export default function Monthly() {
 
   // Collapsible sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    expenses: true, subscriptions: true, debt: true, savings: true, income: true,
+    expenses: true, subscriptions: true, debt: true, checking: true, income: true,
   });
   const toggle = (key: string) => setOpenSections(p => ({ ...p, [key]: !p[key] }));
 
@@ -118,14 +118,14 @@ export default function Monthly() {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddSub, setShowAddSub] = useState(false);
   const [showAddDebt, setShowAddDebt] = useState(false);
-  const [showAddSavings, setShowAddSavings] = useState(false);
+  const [showAddChecking, setShowAddSavings] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
 
   // New item forms
   const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory });
   const [newSub, setNewSub] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', amount: '', group: 'General', active: true });
   const [newDebt, setNewDebt] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[0] });
-  const [newSavingsAcct, setNewSavingsAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: SAVINGS_COLORS[0] });
+  const [newCheckingAcct, setNewSavingsAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
   const [newIncome, setNewIncome] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', isRecurring: true });
 
   // Inline editing
@@ -170,7 +170,7 @@ export default function Monthly() {
     const paid = Number(ccPayments[acc.id]) || 0;
     return sum + (acc.currency === 'USD' ? paid * exchangeRate : paid);
   }, 0);
-  const totalSavings = savingsAccounts.reduce((sum, acc) =>
+  const totalChecking = checkingAccounts.reduce((sum, acc) =>
     sum + (acc.currency === 'USD' ? acc.currentBalance * exchangeRate : acc.currentBalance), 0);
 
   // Handlers
@@ -192,11 +192,11 @@ export default function Monthly() {
     setShowAddDebt(false);
     toast.success('Debt account added');
   }
-  async function handleAddSavingsAcct() {
-    await store.addSavingsAccount({ name: newSavingsAcct.name, currency: newSavingsAcct.currency, currentBalance: Number(newSavingsAcct.currentBalance), color: newSavingsAcct.color });
-    setNewSavingsAcct({ name: '', currency: 'COP', currentBalance: '', color: SAVINGS_COLORS[savingsAccounts.length % SAVINGS_COLORS.length] });
+  async function handleAddCheckingAcct() {
+    await store.addCheckingAccount({ name: newCheckingAcct.name, currency: newCheckingAcct.currency, currentBalance: Number(newCheckingAcct.currentBalance), color: newCheckingAcct.color });
+    setNewSavingsAcct({ name: '', currency: 'COP', currentBalance: '', color: CHECKING_COLORS[checkingAccounts.length % CHECKING_COLORS.length] });
     setShowAddSavings(false);
-    toast.success('Savings account added');
+    toast.success('Checking account added');
   }
   async function handleAddIncome() {
     await store.addIncomeSource({ name: newIncome.name, amount: Number(newIncome.amount), currency: newIncome.currency, isRecurring: newIncome.isRecurring });
@@ -208,7 +208,7 @@ export default function Monthly() {
     if (!deleteConfirm) return;
     const { type, id } = deleteConfirm;
     if (type === 'debt') await store.deleteDebtAccount(id);
-    else if (type === 'savings') await store.deleteSavingsAccount(id);
+    else if (type === 'checking') await store.deleteCheckingAccount(id);
     else if (type === 'income') await store.deleteIncomeSource(id);
     else if (type === 'expense') await store.deleteFixedExpense(id);
     else if (type === 'sub') await store.deleteSubscription(id);
@@ -268,18 +268,18 @@ export default function Monthly() {
         </div>
       </div>
 
-      {/* Savings Accounts */}
+      {/* Checking Accounts */}
       <SectionCard
         icon={Landmark}
-        title="Savings Accounts"
-        subtitle={formatCOP(totalSavings)}
+        title="Checking Accounts"
+        subtitle={formatCOP(totalChecking)}
         subtitleColor="text-primary"
-        open={openSections.savings}
-        onToggle={() => toggle('savings')}
+        open={openSections.checking}
+        onToggle={() => toggle('checking')}
         onAdd={() => setShowAddSavings(true)}
       >
-        {savingsAccounts.length === 0 && <EmptyState text="No savings accounts yet" />}
-        {savingsAccounts.map(acc => (
+        {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
+        {checkingAccounts.map(acc => (
           <div key={acc.id} className="border-b border-border/50 last:border-0">
             <div className="flex items-center justify-between py-2 gap-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -290,24 +290,24 @@ export default function Monthly() {
               <div className="flex items-center gap-2 shrink-0">
                 <MoneyInput
                   value={String(acc.currentBalance)}
-                  onChange={v => store.updateSavingsAccount(acc.id, { currentBalance: Number(v) || 0 })}
+                  onChange={v => store.updateCheckingAccount(acc.id, { currentBalance: Number(v) || 0 })}
                   onBlur={() => {}}
                 />
                 <button onClick={() => toggleEdit(acc.id)} className={`p-1.5 text-muted-foreground hover:text-primary transition-colors ${editingId === acc.id ? 'text-primary' : ''}`}>
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => setDeleteConfirm({ type: 'savings', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
+                <button onClick={() => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name })} className="p-1.5 text-muted-foreground hover:text-destructive">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
             {editingId === acc.id && (
               <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
-                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateSavingsAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                 <div><label className="text-[10px] text-muted-foreground">Currency</label>
-                  <Select value={acc.currency} onValueChange={v => store.updateSavingsAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
+                  <Select value={acc.currency} onValueChange={v => store.updateCheckingAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                 <div><label className="text-[10px] text-muted-foreground">Color</label>
-                  <div className="flex gap-1 flex-wrap pt-1">{SAVINGS_COLORS.map(c => (<button key={c} onClick={() => store.updateSavingsAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
+                  <div className="flex gap-1 flex-wrap pt-1">{CHECKING_COLORS.map(c => (<button key={c} onClick={() => store.updateCheckingAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
               </div>
             )}
           </div>
@@ -555,7 +555,7 @@ export default function Monthly() {
           <SummaryRow label="Variable Spending" value={formatCOP(totalSpending)} />
           <SummaryRow label="Debt Min. Payments" value={formatCOP(debtMin)} />
           <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
-          <SummaryRow label="Total Savings" value={formatCOP(totalSavings)} color="text-primary" />
+          <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
           <Separator />
           <div className="flex justify-between font-bold text-sm pt-1">
             <span>Balance</span>
@@ -645,21 +645,21 @@ export default function Monthly() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Savings Account */}
-      <Dialog open={showAddSavings} onOpenChange={setShowAddSavings}>
+      {/* Add Checking Account */}
+      <Dialog open={showAddChecking} onOpenChange={setShowAddSavings}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader><DialogTitle>Add Savings Account</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Add Checking Account</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>Name</Label><Input value={newSavingsAcct.name} onChange={e => setNewSavingsAcct(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Bancolombia Savings" className="bg-secondary border-border" /></div>
+            <div><Label>Name</Label><Input value={newCheckingAcct.name} onChange={e => setNewSavingsAcct(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Bancolombia Checking" className="bg-secondary border-border" /></div>
             <div><Label>Currency</Label>
-              <Select value={newSavingsAcct.currency} onValueChange={v => setNewSavingsAcct(p => ({ ...p, currency: v as 'COP' | 'USD' }))}>
+              <Select value={newCheckingAcct.currency} onValueChange={v => setNewSavingsAcct(p => ({ ...p, currency: v as 'COP' | 'USD' }))}>
                 <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent>
               </Select>
             </div>
-            <div><Label>Current Balance</Label><Input type="number" value={newSavingsAcct.currentBalance} onChange={e => setNewSavingsAcct(p => ({ ...p, currentBalance: e.target.value }))} className="bg-secondary border-border" /></div>
+            <div><Label>Current Balance</Label><Input type="number" value={newCheckingAcct.currentBalance} onChange={e => setNewSavingsAcct(p => ({ ...p, currentBalance: e.target.value }))} className="bg-secondary border-border" /></div>
           </div>
-          <DialogFooter><Button onClick={handleAddSavingsAcct} disabled={!newSavingsAcct.name || !newSavingsAcct.currentBalance}>Add</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleAddCheckingAcct} disabled={!newCheckingAcct.name || !newCheckingAcct.currentBalance}>Add</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

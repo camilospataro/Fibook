@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ const categories: { value: SpendingCategory; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-const paymentMethods: { value: PaymentMethod; label: string }[] = [
+const basePaymentMethods: { value: PaymentMethod; label: string }[] = [
   { value: 'cash', label: 'Cash' },
   { value: 'debit', label: 'Debit' },
   { value: 'credit_mastercard_cop', label: 'Mastercard COP' },
@@ -34,6 +34,14 @@ interface Props {
 
 export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const addSpending = useFinanceStore(s => s.addSpending);
+  const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
+  const paymentMethods = useMemo(() => [
+    ...basePaymentMethods,
+    ...checkingAccounts.map(acc => ({
+      value: `checking_${acc.id}` as PaymentMethod,
+      label: acc.name,
+    })),
+  ], [checkingAccounts]);
   const [date, setDate] = useState(getToday());
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');

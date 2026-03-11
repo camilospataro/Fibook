@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import { fetchUSDtoCOP } from '@/lib/exchangeRate';
-import type { DebtAccount, SavingsAccount, IncomeSource, FixedExpense, Subscription, SpendingEntry, MonthlySnapshot, Settings } from '@/types';
+import type { DebtAccount, CheckingAccount, IncomeSource, FixedExpense, Subscription, SpendingEntry, MonthlySnapshot, Settings } from '@/types';
 
 interface FinanceState {
   userId: string | null;
   settings: Settings | null;
   debtAccounts: DebtAccount[];
-  savingsAccounts: SavingsAccount[];
+  checkingAccounts: CheckingAccount[];
   incomeSources: IncomeSource[];
   fixedExpenses: FixedExpense[];
   subscriptions: Subscription[];
@@ -28,10 +28,10 @@ interface FinanceState {
   updateDebtAccount: (id: string, updates: Partial<DebtAccount>) => Promise<void>;
   deleteDebtAccount: (id: string) => Promise<void>;
 
-  // Savings accounts
-  addSavingsAccount: (account: Omit<SavingsAccount, 'id' | 'userId'>) => Promise<void>;
-  updateSavingsAccount: (id: string, updates: Partial<SavingsAccount>) => Promise<void>;
-  deleteSavingsAccount: (id: string) => Promise<void>;
+  // Checking accounts
+  addCheckingAccount: (account: Omit<CheckingAccount, 'id' | 'userId'>) => Promise<void>;
+  updateCheckingAccount: (id: string, updates: Partial<CheckingAccount>) => Promise<void>;
+  deleteCheckingAccount: (id: string) => Promise<void>;
 
   // Income sources
   addIncomeSource: (source: Omit<IncomeSource, 'id' | 'userId'>) => Promise<void>;
@@ -71,7 +71,7 @@ function mapDebt(row: Record<string, unknown>): DebtAccount {
   };
 }
 
-function mapSavings(row: Record<string, unknown>): SavingsAccount {
+function mapSavings(row: Record<string, unknown>): CheckingAccount {
   return {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
     currency: row.currency as 'COP' | 'USD', currentBalance: row.current_balance as number,
@@ -128,7 +128,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   userId: null,
   settings: null,
   debtAccounts: [],
-  savingsAccounts: [],
+  checkingAccounts: [],
   incomeSources: [],
   fixedExpenses: [],
   subscriptions: [],
@@ -163,7 +163,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       userId,
       settings: mappedSettings,
       debtAccounts: (debtRes.data ?? []).map(mapDebt),
-      savingsAccounts: (savingsRes.data ?? []).map(mapSavings),
+      checkingAccounts: (savingsRes.data ?? []).map(mapSavings),
       incomeSources: (incomeRes.data ?? []).map(mapIncome),
       fixedExpenses: (expenseRes.data ?? []).map(mapExpense),
       subscriptions: (subsRes.data ?? []).map(mapSubscription),
@@ -235,28 +235,28 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set(s => ({ debtAccounts: s.debtAccounts.filter(a => a.id !== id) }));
   },
 
-  // Savings accounts
-  addSavingsAccount: async (account) => {
+  // Checking accounts
+  addCheckingAccount: async (account) => {
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('savings_accounts').insert({
       user_id: userId, name: account.name, currency: account.currency,
       current_balance: account.currentBalance, color: account.color,
     }).select().single();
-    if (data) set(s => ({ savingsAccounts: [...s.savingsAccounts, mapSavings(data)] }));
+    if (data) set(s => ({ checkingAccounts: [...s.checkingAccounts, mapSavings(data)] }));
   },
-  updateSavingsAccount: async (id, updates) => {
+  updateCheckingAccount: async (id, updates) => {
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.currentBalance !== undefined) dbUpdates.current_balance = updates.currentBalance;
     if (updates.color !== undefined) dbUpdates.color = updates.color;
     await supabase.from('savings_accounts').update(dbUpdates).eq('id', id);
-    set(s => ({ savingsAccounts: s.savingsAccounts.map(a => a.id === id ? { ...a, ...updates } : a) }));
+    set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === id ? { ...a, ...updates } : a) }));
   },
-  deleteSavingsAccount: async (id) => {
+  deleteCheckingAccount: async (id) => {
     await supabase.from('savings_accounts').delete().eq('id', id);
-    set(s => ({ savingsAccounts: s.savingsAccounts.filter(a => a.id !== id) }));
+    set(s => ({ checkingAccounts: s.checkingAccounts.filter(a => a.id !== id) }));
   },
 
   // Income sources
@@ -339,7 +339,20 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       user_id: userId, date: entry.date, description: entry.description, amount: entry.amount,
       category: entry.category, payment_method: entry.paymentMethod,
     }).select().single();
-    if (data) set(s => ({ spending: [mapSpending(data), ...s.spending] }));
+    if (data) {
+      set(s => ({ spending: [mapSpending(data), ...s.spending] }));
+      // Deduct from checking account if payment method is checking_<id>
+      if (entry.paymentMethod.startsWith('checking_')) {
+        const accountId = entry.paymentMethod.replace('checking_', '');
+        const account = get().checkingAccounts.find(a => a.id === accountId);
+        if (account) {
+          const newBalance = account.currentBalance - entry.amount;
+          const dbUpdates = { current_balance: newBalance };
+          await supabase.from('savings_accounts').update(dbUpdates).eq('id', accountId);
+          set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === accountId ? { ...a, currentBalance: newBalance } : a) }));
+        }
+      }
+    }
   },
   updateSpending: async (id, updates) => {
     const dbUpdates: Record<string, unknown> = {};

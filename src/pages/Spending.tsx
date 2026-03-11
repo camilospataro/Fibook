@@ -17,22 +17,33 @@ const categoryLabels: Record<string, string> = {
   entertainment: 'Entertainment', health: 'Health', shopping: 'Shopping', other: 'Other',
 };
 
-const paymentLabel: Record<string, string> = {
+const basePaymentLabel: Record<string, string> = {
   cash: 'Cash', debit: 'Debit', credit_mastercard_cop: 'MC COP',
   credit_mastercard_usd: 'MC USD', credit_visa: 'Visa',
 };
 
 const allCategories: SpendingCategory[] = ['groceries', 'transport', 'food', 'entertainment', 'health', 'shopping', 'other'];
-const allPaymentMethods: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' }, { value: 'debit', label: 'Debit' },
-  { value: 'credit_mastercard_cop', label: 'MC COP' }, { value: 'credit_mastercard_usd', label: 'MC USD' },
-  { value: 'credit_visa', label: 'Visa' },
-];
 
 export default function Spending() {
   const spending = useFinanceStore(s => s.spending);
   const updateSpending = useFinanceStore(s => s.updateSpending);
   const deleteSpending = useFinanceStore(s => s.deleteSpending);
+  const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
+
+  const paymentLabel = useMemo(() => {
+    const labels: Record<string, string> = { ...basePaymentLabel };
+    for (const acc of checkingAccounts) {
+      labels[`checking_${acc.id}`] = acc.name;
+    }
+    return labels;
+  }, [checkingAccounts]);
+
+  const allPaymentMethods: { value: PaymentMethod; label: string }[] = useMemo(() => [
+    { value: 'cash', label: 'Cash' }, { value: 'debit', label: 'Debit' },
+    { value: 'credit_mastercard_cop', label: 'MC COP' }, { value: 'credit_mastercard_usd', label: 'MC USD' },
+    { value: 'credit_visa', label: 'Visa' },
+    ...checkingAccounts.map(acc => ({ value: `checking_${acc.id}` as PaymentMethod, label: acc.name })),
+  ], [checkingAccounts]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<SpendingCategory | 'all'>('all');

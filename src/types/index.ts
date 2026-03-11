@@ -17,7 +17,7 @@ export interface DebtAccount {
   color: string;
 }
 
-export interface SavingsAccount {
+export interface CheckingAccount {
   id: string;
   userId: string;
   name: string;
@@ -61,7 +61,7 @@ export interface SpendingEntry {
   description: string;
   amount: number;
   category: 'groceries' | 'transport' | 'food' | 'entertainment' | 'health' | 'shopping' | 'other';
-  paymentMethod: 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa';
+  paymentMethod: 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa' | `checking_${string}`;
 }
 
 export interface MonthlySnapshot {
