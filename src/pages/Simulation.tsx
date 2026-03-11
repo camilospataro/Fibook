@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Play, RotateCcw, Check, ArrowUpCircle, ArrowDownCircle, Pencil, Link2, Repeat } from 'lucide-react';
+import { Play, RotateCcw, Check, ArrowUpCircle, ArrowDownCircle, Pencil, Link2, Repeat, BarChart3, CalendarDays } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,8 @@ import SimulationChart from '@/components/simulation/SimulationChart';
 import SimulationTimeline from '@/components/simulation/SimulationTimeline';
 import SimulationProjections from '@/components/simulation/SimulationProjections';
 import ScenarioManager from '@/components/simulation/ScenarioManager';
+import SimulationPlayback from '@/components/simulation/SimulationPlayback';
+import CashFlowCalendar from '@/components/simulation/CashFlowCalendar';
 import DayBar from '@/components/simulation/DayBar';
 
 const typeLabel: Record<string, string> = {
@@ -40,6 +42,10 @@ export default function Simulation() {
   const [simulated, setSimulated] = useState(false);
   const [applied, setApplied] = useState(false);
   const [editingRule, setEditingRule] = useState<string | null>(null);
+
+  // Visual mode
+  const [viewMode, setViewMode] = useState<'chart' | 'calendar'>('chart');
+  const [activeDay, setActiveDay] = useState(0);
 
   // Overrides & scenarios
   const [overrides, setOverrides] = useState<RuleOverrides>({});
@@ -223,15 +229,27 @@ export default function Simulation() {
     );
   }
 
+  // Playback day handler
+  const handleDayChange = useCallback((dayIndex: number) => {
+    if (dayIndex === -1) {
+      // Increment from playback auto-advance
+      setActiveDay(prev => Math.min(prev + 1, chartData.length - 1));
+    } else {
+      setActiveDay(dayIndex);
+    }
+  }, [chartData.length]);
+
   // Simulation controls
   const runSim = useCallback(() => {
     setSimulated(true);
     setApplied(false);
+    setActiveDay(0);
   }, []);
 
   const resetSim = useCallback(() => {
     setSimulated(false);
     setApplied(false);
+    setActiveDay(0);
   }, []);
 
   const applySim = useCallback(async () => {
@@ -510,13 +528,58 @@ export default function Simulation() {
       {/* Results */}
       {simulated && (
         <>
-          <SimulationChart
-            chartData={mergedChartData}
-            checkingAccounts={checkingAccounts}
-            monthBoundaries={monthBoundaries}
-            monthCount={monthCount}
-            scenarioResults={scenarioResults}
-          />
+          {/* View mode toggle */}
+          <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5 w-fit">
+            <button
+              onClick={() => setViewMode('chart')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                viewMode === 'chart' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Chart
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                viewMode === 'calendar' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              Calendar
+            </button>
+          </div>
+
+          {viewMode === 'chart' ? (
+            <>
+              <SimulationChart
+                chartData={mergedChartData}
+                checkingAccounts={checkingAccounts}
+                monthBoundaries={monthBoundaries}
+                monthCount={monthCount}
+                scenarioResults={scenarioResults}
+                activeDay={activeDay}
+                onDayClick={handleDayChange}
+              />
+
+              {/* Playback scrubber */}
+              <SimulationPlayback
+                chartData={chartData}
+                events={events}
+                checkingAccounts={checkingAccounts}
+                activeDay={activeDay}
+                onDayChange={handleDayChange}
+              />
+            </>
+          ) : (
+            <CashFlowCalendar
+              chartData={chartData}
+              events={events}
+              checkingAccounts={checkingAccounts}
+              startMonth={startMonth}
+              monthCount={monthCount}
+            />
+          )}
 
           <SimulationProjections
             accountStates={accountStates}
