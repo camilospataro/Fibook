@@ -68,6 +68,7 @@ function mapDebt(row: Record<string, unknown>): DebtAccount {
     minimumMonthlyPayment: row.minimum_monthly_payment as number,
     monthlyPayment: typeof row.monthly_payment === 'number' ? row.monthly_payment : 0,
     color: row.color as string,
+    linkedAccountId: (row.linked_account_id as string) ?? null,
   };
 }
 
@@ -84,6 +85,8 @@ function mapIncome(row: Record<string, unknown>): IncomeSource {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
     amount: row.amount as number, currency: (row.currency as 'COP' | 'USD') ?? 'COP',
     isRecurring: row.is_recurring as boolean,
+    linkedAccountId: (row.linked_account_id as string) ?? null,
+    depositDay: (row.deposit_day as number) ?? 1,
   };
 }
 
@@ -92,6 +95,7 @@ function mapExpense(row: Record<string, unknown>): FixedExpense {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
     amount: row.amount as number, currency: (row.currency as 'COP' | 'USD') ?? 'COP',
     category: row.category as FixedExpense['category'],
+    linkedAccountId: (row.linked_account_id as string) ?? null,
   };
 }
 
@@ -100,6 +104,7 @@ function mapSubscription(row: Record<string, unknown>): Subscription {
     id: row.id as string, userId: row.user_id as string, name: row.name as string,
     currency: row.currency as 'COP' | 'USD', amount: row.amount as number,
     group: (row.group as string) ?? 'General', active: row.active as boolean,
+    linkedAccountId: (row.linked_account_id as string) ?? null,
   };
 }
 
@@ -215,7 +220,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { data } = await supabase.from('debt_accounts').insert({
       user_id: userId, name: account.name, currency: account.currency,
       current_balance: account.currentBalance, minimum_monthly_payment: account.minimumMonthlyPayment,
-      monthly_payment: 0, color: account.color,
+      monthly_payment: 0, color: account.color, linked_account_id: account.linkedAccountId ?? null,
     }).select().single();
     if (data) set(s => ({ debtAccounts: [...s.debtAccounts, mapDebt(data)] }));
   },
@@ -227,6 +232,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.minimumMonthlyPayment !== undefined) dbUpdates.minimum_monthly_payment = updates.minimumMonthlyPayment;
     if (updates.monthlyPayment !== undefined) dbUpdates.monthly_payment = updates.monthlyPayment;
     if (updates.color !== undefined) dbUpdates.color = updates.color;
+    if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
     await supabase.from('debt_accounts').update(dbUpdates).eq('id', id);
     set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === id ? { ...a, ...updates } : a) }));
   },
@@ -265,7 +271,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!userId) return;
     const { data } = await supabase.from('income_sources').insert({
       user_id: userId, name: source.name, amount: source.amount, currency: source.currency,
-      is_recurring: source.isRecurring,
+      is_recurring: source.isRecurring, linked_account_id: source.linkedAccountId ?? null,
+      deposit_day: source.depositDay ?? 1,
     }).select().single();
     if (data) set(s => ({ incomeSources: [...s.incomeSources, mapIncome(data)] }));
   },
@@ -275,6 +282,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
+    if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
+    if (updates.depositDay !== undefined) dbUpdates.deposit_day = updates.depositDay;
     await supabase.from('income_sources').update(dbUpdates).eq('id', id);
     set(s => ({ incomeSources: s.incomeSources.map(i => i.id === id ? { ...i, ...updates } : i) }));
   },
@@ -289,7 +298,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!userId) return;
     const { data } = await supabase.from('fixed_expenses').insert({
       user_id: userId, name: expense.name, amount: expense.amount, currency: expense.currency,
-      category: expense.category,
+      category: expense.category, linked_account_id: expense.linkedAccountId ?? null,
     }).select().single();
     if (data) set(s => ({ fixedExpenses: [...s.fixedExpenses, mapExpense(data)] }));
   },
@@ -299,6 +308,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
     await supabase.from('fixed_expenses').update(dbUpdates).eq('id', id);
     set(s => ({ fixedExpenses: s.fixedExpenses.map(e => e.id === id ? { ...e, ...updates } : e) }));
   },
@@ -312,7 +322,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('subscriptions').insert({
-      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, group: sub.group, active: sub.active,
+      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, group: sub.group, active: sub.active, linked_account_id: sub.linkedAccountId ?? null,
     }).select().single();
     if (data) set(s => ({ subscriptions: [...s.subscriptions, mapSubscription(data)] }));
   },
@@ -323,6 +333,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
     if (updates.group !== undefined) dbUpdates.group = updates.group;
     if (updates.active !== undefined) dbUpdates.active = updates.active;
+    if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
     await supabase.from('subscriptions').update(dbUpdates).eq('id', id);
     set(s => ({ subscriptions: s.subscriptions.map(sub => sub.id === id ? { ...sub, ...updates } : sub) }));
   },

@@ -15,6 +15,7 @@ export interface DebtAccount {
   minimumMonthlyPayment: number;
   monthlyPayment: number;
   color: string;
+  linkedAccountId: string | null;
 }
 
 export interface CheckingAccount {
@@ -33,6 +34,8 @@ export interface IncomeSource {
   amount: number;
   currency: 'COP' | 'USD';
   isRecurring: boolean;
+  linkedAccountId: string | null;
+  depositDay: number;
 }
 
 export interface FixedExpense {
@@ -42,6 +45,7 @@ export interface FixedExpense {
   amount: number;
   currency: 'COP' | 'USD';
   category: 'housing' | 'food' | 'transport' | 'entertainment' | 'health' | 'other';
+  linkedAccountId: string | null;
 }
 
 export interface Subscription {
@@ -52,6 +56,7 @@ export interface Subscription {
   amount: number;
   group: string;
   active: boolean;
+  linkedAccountId: string | null;
 }
 
 export interface SpendingEntry {

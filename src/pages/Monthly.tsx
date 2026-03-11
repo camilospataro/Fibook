@@ -118,15 +118,15 @@ export default function Monthly() {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddSub, setShowAddSub] = useState(false);
   const [showAddDebt, setShowAddDebt] = useState(false);
-  const [showAddChecking, setShowAddSavings] = useState(false);
+  const [showAddChecking, setShowAddChecking] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
 
   // New item forms
-  const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory });
-  const [newSub, setNewSub] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', amount: '', group: 'General', active: true });
-  const [newDebt, setNewDebt] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[0] });
-  const [newCheckingAcct, setNewSavingsAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
-  const [newIncome, setNewIncome] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', isRecurring: true });
+  const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory, linkedAccountId: null as string | null });
+  const [newSub, setNewSub] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', amount: '', group: 'General', active: true, linkedAccountId: null as string | null });
+  const [newDebt, setNewDebt] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[0], linkedAccountId: null as string | null });
+  const [newCheckingAcct, setNewCheckingAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
+  const [newIncome, setNewIncome] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', isRecurring: true, linkedAccountId: null as string | null, depositDay: 1 });
 
   // Inline editing
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -175,32 +175,32 @@ export default function Monthly() {
 
   // Handlers
   async function handleAddExpense() {
-    await store.addFixedExpense({ name: newExpense.name, amount: Number(newExpense.amount), currency: newExpense.currency, category: newExpense.category });
-    setNewExpense({ name: '', amount: '', currency: 'COP', category: 'other' });
+    await store.addFixedExpense({ name: newExpense.name, amount: Number(newExpense.amount), currency: newExpense.currency, category: newExpense.category, linkedAccountId: newExpense.linkedAccountId });
+    setNewExpense({ name: '', amount: '', currency: 'COP', category: 'other', linkedAccountId: null });
     setShowAddExpense(false);
     toast.success('Fixed expense added');
   }
   async function handleAddSub() {
-    await store.addSubscription({ name: newSub.name, currency: newSub.currency, amount: Number(newSub.amount), group: newSub.group || 'General', active: newSub.active });
-    setNewSub({ name: '', currency: 'COP', amount: '', group: 'General', active: true });
+    await store.addSubscription({ name: newSub.name, currency: newSub.currency, amount: Number(newSub.amount), group: newSub.group || 'General', active: newSub.active, linkedAccountId: newSub.linkedAccountId });
+    setNewSub({ name: '', currency: 'COP', amount: '', group: 'General', active: true, linkedAccountId: null });
     setShowAddSub(false);
     toast.success('Subscription added');
   }
   async function handleAddDebt() {
-    await store.addDebtAccount({ name: newDebt.name, currency: newDebt.currency, currentBalance: Number(newDebt.currentBalance), minimumMonthlyPayment: Number(newDebt.minimumMonthlyPayment), color: newDebt.color });
-    setNewDebt({ name: '', currency: 'COP', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[accounts.length % DEBT_COLORS.length] });
+    await store.addDebtAccount({ name: newDebt.name, currency: newDebt.currency, currentBalance: Number(newDebt.currentBalance), minimumMonthlyPayment: Number(newDebt.minimumMonthlyPayment), color: newDebt.color, linkedAccountId: newDebt.linkedAccountId });
+    setNewDebt({ name: '', currency: 'COP', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[accounts.length % DEBT_COLORS.length], linkedAccountId: null });
     setShowAddDebt(false);
     toast.success('Debt account added');
   }
   async function handleAddCheckingAcct() {
     await store.addCheckingAccount({ name: newCheckingAcct.name, currency: newCheckingAcct.currency, currentBalance: Number(newCheckingAcct.currentBalance), color: newCheckingAcct.color });
-    setNewSavingsAcct({ name: '', currency: 'COP', currentBalance: '', color: CHECKING_COLORS[checkingAccounts.length % CHECKING_COLORS.length] });
-    setShowAddSavings(false);
+    setNewCheckingAcct({ name: '', currency: 'COP', currentBalance: '', color: CHECKING_COLORS[checkingAccounts.length % CHECKING_COLORS.length] });
+    setShowAddChecking(false);
     toast.success('Checking account added');
   }
   async function handleAddIncome() {
-    await store.addIncomeSource({ name: newIncome.name, amount: Number(newIncome.amount), currency: newIncome.currency, isRecurring: newIncome.isRecurring });
-    setNewIncome({ name: '', amount: '', currency: 'COP', isRecurring: true });
+    await store.addIncomeSource({ name: newIncome.name, amount: Number(newIncome.amount), currency: newIncome.currency, isRecurring: newIncome.isRecurring, linkedAccountId: newIncome.linkedAccountId, depositDay: newIncome.depositDay });
+    setNewIncome({ name: '', amount: '', currency: 'COP', isRecurring: true, linkedAccountId: null, depositDay: 1 });
     setShowAddIncome(false);
     toast.success('Income source added');
   }
@@ -276,7 +276,7 @@ export default function Monthly() {
         subtitleColor="text-primary"
         open={openSections.checking}
         onToggle={() => toggle('checking')}
-        onAdd={() => setShowAddSavings(true)}
+        onAdd={() => setShowAddChecking(true)}
       >
         {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
         {checkingAccounts.map(acc => (
@@ -362,6 +362,9 @@ export default function Monthly() {
                 <div><label className="text-[10px] text-muted-foreground">Currency</label>
                   <Select value={src.currency} onValueChange={v => store.updateIncomeSource(src.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                 <div className="sm:col-span-2 flex items-center gap-2"><Switch checked={src.isRecurring} onCheckedChange={v => store.updateIncomeSource(src.id, { isRecurring: v })} /><label className="text-xs text-muted-foreground">Recurring</label></div>
+                <div><label className="text-[10px] text-muted-foreground">Deposit To</label>
+                  <Select value={src.linkedAccountId ?? 'none'} onValueChange={v => store.updateIncomeSource(src.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
+                <div><label className="text-[10px] text-muted-foreground">Deposit Day</label><Input type="number" min="1" max="31" defaultValue={src.depositDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== src.depositDay) store.updateIncomeSource(src.id, { depositDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
               </div>
             )}
           </div>
@@ -400,6 +403,8 @@ export default function Monthly() {
                   <Select value={exp.currency} onValueChange={v => store.updateFixedExpense(exp.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                 <div><label className="text-[10px] text-muted-foreground">Category</label>
                   <Select value={exp.category} onValueChange={v => store.updateFixedExpense(exp.id, { category: v as ExpenseCategory })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></div>
+                <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
+                  <Select value={exp.linkedAccountId ?? 'none'} onValueChange={v => store.updateFixedExpense(exp.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
             }
           >
@@ -462,6 +467,8 @@ export default function Monthly() {
                   <Select value={acc.currency} onValueChange={v => store.updateDebtAccount(acc.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                 <div><label className="text-[10px] text-muted-foreground">Color</label>
                   <div className="flex gap-1 flex-wrap pt-1">{DEBT_COLORS.map(c => (<button key={c} onClick={() => store.updateDebtAccount(acc.id, { color: c })} className={`w-5 h-5 rounded-full border-2 ${acc.color === c ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
+                <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
+                  <Select value={acc.linkedAccountId ?? 'none'} onValueChange={v => store.updateDebtAccount(acc.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
             )}
           </div>
@@ -506,6 +513,8 @@ export default function Monthly() {
                           <Input defaultValue={sub.group} onBlur={e => { const v = e.target.value.trim() || 'General'; if (v !== sub.group) store.updateSubscription(sub.id, { group: v }); }} placeholder="Group name" className="h-7 text-xs bg-secondary border-border flex-1" />
                         )}
                       </div></div>
+                    <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
+                      <Select value={sub.linkedAccountId ?? 'none'} onValueChange={v => store.updateSubscription(sub.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                 }
               >
@@ -589,6 +598,12 @@ export default function Monthly() {
                 <SelectContent>{expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            <div><Label>Pay From</Label>
+              <Select value={newExpense.linkedAccountId ?? 'none'} onValueChange={v => setNewExpense(p => ({ ...p, linkedAccountId: v === 'none' ? null : v }))}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter><Button onClick={handleAddExpense} disabled={!newExpense.name || !newExpense.amount}>Add</Button></DialogFooter>
         </DialogContent>
@@ -621,6 +636,12 @@ export default function Monthly() {
               </Select>
             </div>
             <div><Label>Amount ({newSub.currency})</Label><Input type="number" value={newSub.amount} onChange={e => setNewSub(p => ({ ...p, amount: e.target.value }))} className="bg-secondary border-border" /></div>
+            <div><Label>Pay From</Label>
+              <Select value={newSub.linkedAccountId ?? 'none'} onValueChange={v => setNewSub(p => ({ ...p, linkedAccountId: v === 'none' ? null : v }))}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter><Button onClick={handleAddSub} disabled={!newSub.name || !newSub.amount}>Add</Button></DialogFooter>
         </DialogContent>
@@ -640,24 +661,30 @@ export default function Monthly() {
             </div>
             <div><Label>Current Balance</Label><Input type="number" value={newDebt.currentBalance} onChange={e => setNewDebt(p => ({ ...p, currentBalance: e.target.value }))} className="bg-secondary border-border" /></div>
             <div><Label>Minimum Monthly Payment</Label><Input type="number" value={newDebt.minimumMonthlyPayment} onChange={e => setNewDebt(p => ({ ...p, minimumMonthlyPayment: e.target.value }))} className="bg-secondary border-border" /></div>
+            <div><Label>Pay From</Label>
+              <Select value={newDebt.linkedAccountId ?? 'none'} onValueChange={v => setNewDebt(p => ({ ...p, linkedAccountId: v === 'none' ? null : v }))}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter><Button onClick={handleAddDebt} disabled={!newDebt.name || !newDebt.currentBalance}>Add</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Add Checking Account */}
-      <Dialog open={showAddChecking} onOpenChange={setShowAddSavings}>
+      <Dialog open={showAddChecking} onOpenChange={setShowAddChecking}>
         <DialogContent className="bg-card border-border">
           <DialogHeader><DialogTitle>Add Checking Account</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>Name</Label><Input value={newCheckingAcct.name} onChange={e => setNewSavingsAcct(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Bancolombia Checking" className="bg-secondary border-border" /></div>
+            <div><Label>Name</Label><Input value={newCheckingAcct.name} onChange={e => setNewCheckingAcct(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Bancolombia Checking" className="bg-secondary border-border" /></div>
             <div><Label>Currency</Label>
-              <Select value={newCheckingAcct.currency} onValueChange={v => setNewSavingsAcct(p => ({ ...p, currency: v as 'COP' | 'USD' }))}>
+              <Select value={newCheckingAcct.currency} onValueChange={v => setNewCheckingAcct(p => ({ ...p, currency: v as 'COP' | 'USD' }))}>
                 <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent>
               </Select>
             </div>
-            <div><Label>Current Balance</Label><Input type="number" value={newCheckingAcct.currentBalance} onChange={e => setNewSavingsAcct(p => ({ ...p, currentBalance: e.target.value }))} className="bg-secondary border-border" /></div>
+            <div><Label>Current Balance</Label><Input type="number" value={newCheckingAcct.currentBalance} onChange={e => setNewCheckingAcct(p => ({ ...p, currentBalance: e.target.value }))} className="bg-secondary border-border" /></div>
           </div>
           <DialogFooter><Button onClick={handleAddCheckingAcct} disabled={!newCheckingAcct.name || !newCheckingAcct.currentBalance}>Add</Button></DialogFooter>
         </DialogContent>
@@ -677,6 +704,13 @@ export default function Monthly() {
             </div>
             <div><Label>Amount ({newIncome.currency})</Label><Input type="number" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: e.target.value }))} className="bg-secondary border-border" /></div>
             <div className="flex items-center gap-2"><Switch checked={newIncome.isRecurring} onCheckedChange={v => setNewIncome(p => ({ ...p, isRecurring: v }))} /><Label>Recurring</Label></div>
+            <div><Label>Deposit To</Label>
+              <Select value={newIncome.linkedAccountId ?? 'none'} onValueChange={v => setNewIncome(p => ({ ...p, linkedAccountId: v === 'none' ? null : v }))}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label>Deposit Day</Label><Input type="number" min="1" max="31" value={newIncome.depositDay} onChange={e => setNewIncome(p => ({ ...p, depositDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) }))} className="bg-secondary border-border" /></div>
           </div>
           <DialogFooter><Button onClick={handleAddIncome} disabled={!newIncome.name || !newIncome.amount}>Add</Button></DialogFooter>
         </DialogContent>
