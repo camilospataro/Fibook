@@ -1,8 +1,8 @@
-import { useCallback } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import { useCallback, useMemo } from 'react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Customized } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { CheckingAccount } from '@/types';
-import type { ChartPoint, ScenarioResult } from '@/types/simulation';
+import type { ChartPoint, ScenarioResult, SimEvent } from '@/types/simulation';
 import { formatCurrency } from '@/lib/formatters';
 
 interface SimulationChartProps {
@@ -10,9 +10,119 @@ interface SimulationChartProps {
   checkingAccounts: CheckingAccount[];
   monthBoundaries: number[];
   monthCount: number;
+  events: SimEvent[];
   scenarioResults?: ScenarioResult[];
   activeDay?: number;
   onDayClick?: (dayIndex: number) => void;
+}
+
+// Group events by their chart index to position tags
+function buildEventTags(events: SimEvent[], chartData: ChartPoint[]) {
+  const tags: { dayIndex: number; dayLabel: string; items: { label: string; direction: 'in' | 'out' }[] }[] = [];
+  const byIndex = new Map<number, { label: string; direction: 'in' | 'out' }[]>();
+
+  let monthIdx = 0;
+  const dayLabelToIndex = new Map<string, { index: number; monthIdx: number }>();
+
+  for (let i = 1; i < chartData.length; i++) {
+    const label = chartData[i].dayLabel;
+    const dayNum = parseInt(label.split(' ').pop() ?? label, 10);
+    const prevLabel = chartData[i - 1]?.dayLabel ?? '';
+    const prevDayNum = parseInt(prevLabel.split(' ').pop() ?? prevLabel, 10);
+    if (i > 1 && dayNum === 1 && prevDayNum > 1) monthIdx++;
+    dayLabelToIndex.set(`${monthIdx}-${dayNum}`, { index: i, monthIdx });
+  }
+
+  for (const evt of events) {
+    const key = `${evt.monthIndex}-${evt.day}`;
+    const entry = dayLabelToIndex.get(key);
+    if (!entry) continue;
+    if (!byIndex.has(entry.index)) byIndex.set(entry.index, []);
+    byIndex.get(entry.index)!.push({ label: evt.label, direction: evt.direction });
+  }
+
+  for (const [idx, items] of byIndex) {
+    // Dedupe and limit to 3 tags per day for readability
+    const unique = items.reduce((acc, item) => {
+      if (!acc.some(a => a.label === item.label)) acc.push(item);
+      return acc;
+    }, [] as typeof items);
+    tags.push({ dayIndex: idx, dayLabel: chartData[idx].dayLabel, items: unique.slice(0, 3) });
+  }
+
+  return tags;
+}
+
+// Custom renderer for event annotations on the chart
+function EventAnnotations(props: {
+  tags: ReturnType<typeof buildEventTags>;
+  xAxisMap?: Record<string, { scale: (v: string) => number; bandwidth?: () => number }>;
+  yAxisMap?: Record<string, { scale: (v: number) => number }>;
+  offset?: { top: number; bottom: number; left: number; right: number };
+}) {
+  const { tags, xAxisMap, yAxisMap } = props;
+  if (!xAxisMap || !yAxisMap) return null;
+
+  const xAxis = Object.values(xAxisMap)[0];
+  const yAxis = Object.values(yAxisMap)[0];
+  if (!xAxis?.scale || !yAxis?.scale) return null;
+
+  const bandwidth = xAxis.bandwidth ? xAxis.bandwidth() : 0;
+
+  return (
+    <g className="event-annotations">
+      {tags.map((tag, ti) => {
+        const x = xAxis.scale(tag.dayLabel) + bandwidth / 2;
+        if (x === undefined || isNaN(x)) return null;
+
+        // Stagger vertically to avoid overlap
+        const baseY = 12;
+
+        return (
+          <g key={ti}>
+            {tag.items.map((item, ii) => {
+              const y = baseY + ii * 14;
+              const isIn = item.direction === 'in';
+              const truncated = item.label.length > 12 ? item.label.slice(0, 11) + '…' : item.label;
+
+              return (
+                <g key={ii}>
+                  <rect
+                    x={x - 2}
+                    y={y - 5}
+                    width={truncated.length * 5.2 + 14}
+                    height={12}
+                    rx={3}
+                    fill={isIn ? 'hsla(160, 60%, 40%, 0.85)' : 'hsla(0, 60%, 45%, 0.75)'}
+                  />
+                  <text
+                    x={x + 5}
+                    y={y + 3}
+                    fontSize={8}
+                    fontWeight={500}
+                    fill="white"
+                  >
+                    {isIn ? '↓ ' : '↑ '}{truncated}
+                  </text>
+                </g>
+              );
+            })}
+            {/* Connector line from tag to axis */}
+            <line
+              x1={x}
+              y1={baseY + tag.items.length * 14 - 6}
+              x2={x}
+              y2={baseY + tag.items.length * 14 + 4}
+              stroke="hsl(var(--muted-foreground))"
+              strokeWidth={0.5}
+              strokeDasharray="2 2"
+              opacity={0.4}
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
 }
 
 export default function SimulationChart({
@@ -20,6 +130,7 @@ export default function SimulationChart({
   checkingAccounts,
   monthBoundaries,
   monthCount,
+  events,
   scenarioResults,
   activeDay,
   onDayClick,
@@ -29,16 +140,21 @@ export default function SimulationChart({
   const totalPoints = chartData.length;
   const tickInterval = totalPoints > 120 ? 14 : totalPoints > 60 ? 7 : totalPoints > 30 ? 3 : 1;
 
+  const tags = useMemo(() => buildEventTags(events, chartData), [events, chartData]);
+
   const handleClick = useCallback((data: { activeTooltipIndex?: number }) => {
     if (data?.activeTooltipIndex !== undefined && onDayClick) {
       onDayClick(data.activeTooltipIndex);
     }
   }, [onDayClick]);
 
-  // Find the active day label for the reference line
   const activeDayLabel = activeDay !== undefined && activeDay > 0 && activeDay < chartData.length
     ? chartData[activeDay].dayLabel
     : undefined;
+
+  // Compute top margin based on max stacked tags
+  const maxTagStack = tags.reduce((m, t) => Math.max(m, t.items.length), 0);
+  const topMargin = Math.max(5, maxTagStack * 14 + 10);
 
   return (
     <Card className="bg-card border-border">
@@ -49,11 +165,11 @@ export default function SimulationChart({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-64 md:h-80">
+        <div className="h-72 md:h-96">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
-              margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
+              margin={{ top: topMargin, right: 5, bottom: 5, left: 5 }}
               onClick={handleClick}
               className={onDayClick ? 'cursor-crosshair' : ''}
             >
@@ -91,11 +207,11 @@ export default function SimulationChart({
                   backgroundColor: 'hsl(var(--card))',
                   border: '1px solid hsl(var(--border))',
                   borderRadius: 8,
-                  fontSize: 12,
+                  fontSize: 11,
+                  maxWidth: 260,
                 }}
-                labelFormatter={v => `${v}`}
+                labelFormatter={v => `Day ${v}`}
                 formatter={(value: number, name: string) => {
-                  // Don't show scenario entries in tooltip with raw IDs
                   if (name.includes('_') && name.length > 30) return null;
                   const acc = checkingAccounts.find(a => a.id === name);
                   if (!acc) return [value, name];
@@ -104,7 +220,6 @@ export default function SimulationChart({
               />
               <ReferenceLine y={0} stroke="hsl(var(--destructive))" strokeDasharray="3 3" opacity={0.5} />
 
-              {/* Active day indicator */}
               {activeDayLabel && (
                 <ReferenceLine
                   x={activeDayLabel}
@@ -114,7 +229,6 @@ export default function SimulationChart({
                 />
               )}
 
-              {/* Month boundary lines */}
               {monthCount > 1 && monthBoundaries.slice(1).map((boundary, i) => (
                 <ReferenceLine
                   key={`mb-${i}`}
@@ -125,7 +239,6 @@ export default function SimulationChart({
                 />
               ))}
 
-              {/* Main account areas with gradient */}
               {checkingAccounts.map(acc => (
                 <Area
                   key={acc.id}
@@ -140,7 +253,6 @@ export default function SimulationChart({
                 />
               ))}
 
-              {/* Scenario comparison overlays */}
               {scenarioResults?.map((sr, si) =>
                 checkingAccounts.map(acc => (
                   <Area
@@ -158,6 +270,16 @@ export default function SimulationChart({
                   />
                 ))
               )}
+
+              {/* Event annotation tags */}
+              <Customized component={(props: Record<string, unknown>) => (
+                <EventAnnotations
+                  tags={tags}
+                  xAxisMap={props.xAxisMap as Record<string, { scale: (v: string) => number; bandwidth?: () => number }>}
+                  yAxisMap={props.yAxisMap as Record<string, { scale: (v: number) => number }>}
+                  offset={props.offset as { top: number; bottom: number; left: number; right: number }}
+                />
+              )} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

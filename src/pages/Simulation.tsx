@@ -557,6 +557,7 @@ export default function Simulation() {
                 checkingAccounts={checkingAccounts}
                 monthBoundaries={monthBoundaries}
                 monthCount={monthCount}
+                events={events}
                 scenarioResults={scenarioResults}
                 activeDay={activeDay}
                 onDayClick={handleDayChange}

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import type { CheckingAccount } from '@/types';
 import type { ChartPoint, SimEvent } from '@/types/simulation';
@@ -17,6 +16,15 @@ interface CashFlowCalendarProps {
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+interface DayData {
+  day: number;
+  balance: number;
+  events: SimEvent[];
+  isWeekend: boolean;
+  change: number;
+  monthIndex: number;
+}
+
 export default function CashFlowCalendar({
   chartData,
   events,
@@ -24,38 +32,29 @@ export default function CashFlowCalendar({
   startMonth,
   monthCount,
 }: CashFlowCalendarProps) {
-  // If multiple accounts, let user pick which to visualize
   const [selectedAccountId, setSelectedAccountId] = useState(checkingAccounts[0]?.id ?? '');
-  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+  const [selectedDay, setSelectedDay] = useState<{ monthIndex: number; day: number } | null>(null);
 
   const selectedAccount = checkingAccounts.find(a => a.id === selectedAccountId);
 
-  // Build per-month calendar grids
   const months = useMemo(() => {
     const result: {
       label: string;
-      monthStr: string;
-      days: {
-        day: number;
-        balance: number;
-        events: SimEvent[];
-        isWeekend: boolean;
-        change: number;
-      }[];
-      startDow: number; // 0=Mon
+      monthIndex: number;
+      days: DayData[];
+      startDow: number;
     }[] = [];
 
-    let chartIndex = 1; // skip "Start"
+    let chartIndex = 1;
 
     for (let mi = 0; mi < monthCount; mi++) {
       const [y, m] = startMonth.split('-').map(Number);
       const d = new Date(y, m - 1 + mi, 1);
-      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      const startDow = (d.getDay() + 6) % 7; // Convert Sun=0 to Mon=0
+      const startDow = (d.getDay() + 6) % 7;
       const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-      const monthDays: typeof result[0]['days'] = [];
+      const monthDays: DayData[] = [];
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(d.getFullYear(), d.getMonth(), day);
@@ -66,20 +65,18 @@ export default function CashFlowCalendar({
         const balance = point ? Number(point[selectedAccountId] ?? 0) : 0;
         const prevBalance = prevPoint ? Number(prevPoint[selectedAccountId] ?? 0) : balance;
         const change = balance - prevBalance;
-
         const dayEvents = events.filter(e => e.monthIndex === mi && e.day === day);
 
-        monthDays.push({ day, balance, events: dayEvents, isWeekend, change });
+        monthDays.push({ day, balance, events: dayEvents, isWeekend, change, monthIndex: mi });
         chartIndex++;
       }
 
-      result.push({ label, monthStr, days: monthDays, startDow });
+      result.push({ label, monthIndex: mi, days: monthDays, startDow });
     }
 
     return result;
   }, [chartData, events, checkingAccounts, selectedAccountId, startMonth, monthCount]);
 
-  // Determine color range for the selected account
   const { minBalance, maxBalance } = useMemo(() => {
     let min = Infinity;
     let max = -Infinity;
@@ -93,29 +90,27 @@ export default function CashFlowCalendar({
   }, [months]);
 
   function balanceToColor(balance: number): string {
-    if (balance < 0) return 'hsl(0 80% 40%)'; // red for negative
+    if (balance < 0) return 'hsl(0 80% 40%)';
     if (maxBalance === minBalance) return 'hsl(160 60% 30%)';
     const ratio = Math.max(0, Math.min(1, (balance - minBalance) / (maxBalance - minBalance)));
-    // Interpolate: red (0%) → yellow (40%) → green (100%)
     if (ratio < 0.4) {
       const t = ratio / 0.4;
-      const h = t * 45; // 0 → 45 (red to yellow-ish)
-      return `hsl(${h} 70% ${25 + t * 10}%)`;
+      return `hsl(${t * 45} 70% ${25 + t * 10}%)`;
     }
     const t = (ratio - 0.4) / 0.6;
-    const h = 45 + t * 115; // 45 → 160 (yellow to green)
-    return `hsl(${h} 60% ${30 + t * 8}%)`;
+    return `hsl(${45 + t * 115} 60% ${30 + t * 8}%)`;
   }
 
-  // Find hovered day data
-  const hoveredDayData = useMemo(() => {
-    if (hoveredDay === null) return null;
+  // Get selected day data
+  const selectedDayData = useMemo(() => {
+    if (!selectedDay) return null;
     for (const month of months) {
-      const d = month.days.find(d => d.day === hoveredDay);
+      if (month.monthIndex !== selectedDay.monthIndex) continue;
+      const d = month.days.find(d => d.day === selectedDay.day);
       if (d) return { ...d, monthLabel: month.label };
     }
     return null;
-  }, [hoveredDay, months]);
+  }, [selectedDay, months]);
 
   return (
     <Card className="bg-card border-border">
@@ -136,48 +131,70 @@ export default function CashFlowCalendar({
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {months.map((month, mi) => (
-          <div key={mi}>
+      <CardContent className="space-y-5">
+        {months.map((month) => (
+          <div key={month.monthIndex}>
             <p className="text-[11px] font-medium mb-1.5">{month.label}</p>
 
             {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+            <div className="grid grid-cols-7 gap-1 mb-1">
               {WEEKDAY_LABELS.map(w => (
                 <div key={w} className="text-[8px] text-muted-foreground text-center">{w}</div>
               ))}
             </div>
 
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-0.5">
-              {/* Empty cells for start offset */}
+            {/* Calendar grid — taller cells to fit event labels */}
+            <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: month.startDow }).map((_, i) => (
-                <div key={`empty-${i}`} className="aspect-square" />
+                <div key={`empty-${i}`} className="min-h-14" />
               ))}
 
               {month.days.map(day => {
-                const hasEvents = day.events.length > 0;
-                const hasIncome = day.events.some(e => e.direction === 'in');
-                const hasExpense = day.events.some(e => e.direction === 'out');
-                const isHovered = hoveredDay === day.day && mi === months.indexOf(month);
+                const isSelected = selectedDay?.monthIndex === month.monthIndex && selectedDay?.day === day.day;
 
                 return (
                   <div
                     key={day.day}
-                    className={`aspect-square rounded-sm flex flex-col items-center justify-center relative cursor-pointer transition-all ${
-                      isHovered ? 'ring-1 ring-primary scale-110 z-10' : ''
-                    } ${day.isWeekend ? 'opacity-80' : ''}`}
-                    style={{ backgroundColor: balanceToColor(day.balance) }}
-                    onMouseEnter={() => setHoveredDay(day.day)}
-                    onMouseLeave={() => setHoveredDay(null)}
-                  >
-                    <span className="text-[9px] font-medium text-white/90 leading-none">{day.day}</span>
-                    {hasEvents && (
-                      <div className="flex gap-px mt-px">
-                        {hasIncome && <div className="w-1 h-1 rounded-full bg-white/80" />}
-                        {hasExpense && <div className="w-1 h-1 rounded-full bg-white/40" />}
-                      </div>
+                    onClick={() => setSelectedDay(
+                      isSelected ? null : { monthIndex: month.monthIndex, day: day.day }
                     )}
+                    className={`min-h-14 rounded-md p-0.5 cursor-pointer transition-all overflow-hidden ${
+                      isSelected ? 'ring-2 ring-primary scale-[1.02] z-10' : 'hover:ring-1 hover:ring-border'
+                    } ${day.isWeekend ? 'opacity-85' : ''}`}
+                    style={{ backgroundColor: balanceToColor(day.balance) }}
+                  >
+                    {/* Day number + balance */}
+                    <div className="flex items-baseline justify-between px-0.5">
+                      <span className="text-[9px] font-semibold text-white/90">{day.day}</span>
+                      {day.change !== 0 && (
+                        <span className={`text-[7px] font-medium ${day.change > 0 ? 'text-green-200' : 'text-red-200'}`}>
+                          {day.change > 0 ? '+' : ''}{abbreviateAmount(day.change)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Event name tags */}
+                    <div className="mt-px space-y-px">
+                      {day.events.slice(0, 3).map((evt, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-center gap-px rounded-sm px-0.5 ${
+                            evt.direction === 'in'
+                              ? 'bg-green-900/60'
+                              : 'bg-red-900/50'
+                          }`}
+                        >
+                          <span className="text-[6.5px] leading-tight text-white/80 truncate">
+                            {evt.direction === 'in' ? '↓' : '↑'} {evt.label.replace(' (spread)', '')}
+                          </span>
+                        </div>
+                      ))}
+                      {day.events.length > 3 && (
+                        <span className="text-[6px] text-white/50 px-0.5">
+                          +{day.events.length - 3} more
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -201,43 +218,55 @@ export default function CashFlowCalendar({
           </div>
         </div>
 
-        {/* Hover detail */}
-        {hoveredDayData && selectedAccount && (
-          <div className="bg-secondary/50 rounded-lg p-2.5 space-y-1.5 animate-in fade-in duration-150">
+        {/* Selected day detail panel */}
+        {selectedDayData && selectedAccount && (
+          <div className="bg-secondary/50 rounded-lg p-3 space-y-2 animate-in slide-in-from-top-2 duration-200">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium">Day {hoveredDayData.day}</span>
-              <span className={`text-[11px] font-bold ${hoveredDayData.balance < 0 ? 'text-destructive' : ''}`}>
-                {formatCurrency(hoveredDayData.balance, selectedAccount.currency)}
+              <span className="text-xs font-medium">{selectedDayData.monthLabel} — Day {selectedDayData.day}</span>
+              <span className={`text-xs font-bold ${selectedDayData.balance < 0 ? 'text-destructive' : ''}`}>
+                {formatCurrency(selectedDayData.balance, selectedAccount.currency)}
               </span>
             </div>
-            {hoveredDayData.change !== 0 && (
+            {selectedDayData.change !== 0 && (
               <div className="flex items-center justify-between">
-                <span className="text-[9px] text-muted-foreground">Change</span>
-                <span className={`text-[10px] font-medium ${hoveredDayData.change > 0 ? 'text-income' : 'text-destructive'}`}>
-                  {hoveredDayData.change > 0 ? '+' : ''}{formatCurrency(hoveredDayData.change, selectedAccount.currency)}
+                <span className="text-[10px] text-muted-foreground">Change from previous day</span>
+                <span className={`text-[11px] font-medium ${selectedDayData.change > 0 ? 'text-income' : 'text-destructive'}`}>
+                  {selectedDayData.change > 0 ? '+' : ''}{formatCurrency(selectedDayData.change, selectedAccount.currency)}
                 </span>
               </div>
             )}
-            {hoveredDayData.events.length > 0 && (
-              <div className="space-y-0.5 pt-0.5 border-t border-border/50">
-                {hoveredDayData.events.map((evt, i) => (
-                  <div key={i} className="flex items-center gap-1.5">
+            {selectedDayData.events.length > 0 ? (
+              <div className="space-y-1 pt-1 border-t border-border/50">
+                {selectedDayData.events.map((evt, i) => (
+                  <div key={i} className="flex items-center gap-2">
                     {evt.direction === 'in' ? (
-                      <ArrowDownCircle className="w-2.5 h-2.5 text-income shrink-0" />
+                      <ArrowDownCircle className="w-3.5 h-3.5 text-income shrink-0" />
                     ) : (
-                      <ArrowUpCircle className="w-2.5 h-2.5 text-destructive shrink-0" />
+                      <ArrowUpCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
                     )}
-                    <span className="text-[9px] flex-1 truncate">{evt.label}</span>
-                    <span className={`text-[9px] font-medium ${evt.direction === 'in' ? 'text-income' : 'text-destructive'}`}>
+                    <span className="text-[11px] flex-1">{evt.label}</span>
+                    <span className="text-[10px] text-muted-foreground">{evt.accountName}</span>
+                    <span className={`text-[11px] font-medium ${evt.direction === 'in' ? 'text-income' : 'text-destructive'}`}>
                       {evt.direction === 'in' ? '+' : '-'}{formatCurrency(evt.amount, evt.currency)}
                     </span>
                   </div>
                 ))}
               </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground italic pt-1 border-t border-border/50">
+                No transactions on this day
+              </p>
             )}
           </div>
         )}
       </CardContent>
     </Card>
   );
+}
+
+function abbreviateAmount(amount: number): string {
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(amount / 1_000).toFixed(0)}K`;
+  return `${Math.round(amount)}`;
 }
