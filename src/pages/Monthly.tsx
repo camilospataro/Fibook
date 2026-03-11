@@ -278,14 +278,6 @@ export default function Monthly() {
         onToggle={() => toggle('savings')}
         onAdd={() => setShowAddSavings(true)}
       >
-        <div className="flex items-center justify-between pb-2 mb-1 border-b border-border/50">
-          <p className="text-xs text-muted-foreground">Monthly savings goal</p>
-          <MoneyInput
-            value={savingsAmount}
-            onChange={setSavingsAmount}
-            onBlur={saveSavingsTarget}
-          />
-        </div>
         {savingsAccounts.length === 0 && <EmptyState text="No savings accounts yet" />}
         {savingsAccounts.map(acc => (
           <div key={acc.id} className="border-b border-border/50 last:border-0">
@@ -320,6 +312,15 @@ export default function Monthly() {
             )}
           </div>
         ))}
+        <Separator className="my-2" />
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Monthly savings goal</span>
+          <MoneyInput
+            value={savingsAmount}
+            onChange={setSavingsAmount}
+            onBlur={saveSavingsTarget}
+          />
+        </div>
       </SectionCard>
 
       {/* Income */}
