@@ -488,29 +488,6 @@ export default function Monthly() {
         </CardContent>
       </Card>
 
-      {/* Savings */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <PiggyBank className="w-4 h-4 text-primary" />
-              Savings Goal
-            </CardTitle>
-            <span className="text-primary font-bold text-sm">{formatCOP(Number(savingsAmount) || 0)}</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">How much do you want to save this month?</p>
-            <MoneyInput
-              value={savingsAmount}
-              onChange={setSavingsAmount}
-              onBlur={saveSavingsTarget}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Savings Accounts */}
       <SectionCard
         icon={Landmark}
@@ -521,6 +498,14 @@ export default function Monthly() {
         onToggle={() => toggle('savings')}
         onAdd={() => setShowAddSavings(true)}
       >
+        <div className="flex items-center justify-between pb-2 mb-1 border-b border-border/50">
+          <p className="text-xs text-muted-foreground">Monthly savings goal</p>
+          <MoneyInput
+            value={savingsAmount}
+            onChange={setSavingsAmount}
+            onBlur={saveSavingsTarget}
+          />
+        </div>
         {savingsAccounts.length === 0 && <EmptyState text="No savings accounts yet" />}
         {savingsAccounts.map(acc => (
           <div key={acc.id} className="border-b border-border/50 last:border-0">
