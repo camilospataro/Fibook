@@ -14,6 +14,8 @@ import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatCurrency, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
 import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP } from '@/lib/calculations';
 import { toast } from 'sonner';
+import MoneyFlowSankey from '@/components/charts/MoneyFlowSankey';
+import MoneyWaterfall from '@/components/charts/MoneyWaterfall';
 import type { ExpenseCategory } from '@/types';
 
 const DEBT_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
@@ -47,7 +49,8 @@ export default function Monthly() {
   }
 
   // Tab view
-  const [activeTab, setActiveTab] = useState<'balances' | 'commitments'>('balances');
+  const [activeTab, setActiveTab] = useState<'balances' | 'movements'>('balances');
+  const [flowView, setFlowView] = useState<'sankey' | 'waterfall'>('sankey');
 
   // Collapsible sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -285,15 +288,15 @@ export default function Monthly() {
           Balances
         </button>
         <button
-          onClick={() => setActiveTab('commitments')}
+          onClick={() => setActiveTab('movements')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-            activeTab === 'commitments'
+            activeTab === 'movements'
               ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <Repeat className="w-4 h-4" />
-          Commitments
+          Movements
         </button>
       </div>
 
@@ -421,9 +424,59 @@ export default function Monthly() {
         </div>
       )}
 
-      {/* ==================== COMMITMENTS TAB ==================== */}
-      {activeTab === 'commitments' && (
+      {/* ==================== MOVEMENTS TAB ==================== */}
+      {activeTab === 'movements' && (
         <div className="space-y-4">
+          {/* Flow Chart Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFlowView('sankey')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                flowView === 'sankey' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Flow
+            </button>
+            <button
+              onClick={() => setFlowView('waterfall')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                flowView === 'waterfall' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Waterfall
+            </button>
+          </div>
+
+          {/* Flow Charts */}
+          {flowView === 'sankey' ? (
+            <MoneyFlowSankey
+              incomeSources={incomeSources}
+              incomeAmounts={incomeAmounts}
+              sideIncome={Number(sideIncome) || 0}
+              fixedExpenses={fixedExpenses}
+              subscriptions={subs}
+              debtAccounts={accounts}
+              ccPayments={ccPayments}
+              checkingAccounts={checkingAccounts}
+              savingsGoal={Number(savingsAmount) || 0}
+              variableSpending={totalSpending}
+              exchangeRate={exchangeRate}
+            />
+          ) : (
+            <MoneyWaterfall
+              incomeSources={incomeSources}
+              incomeAmounts={incomeAmounts}
+              sideIncome={Number(sideIncome) || 0}
+              fixedExpenses={fixedExpenses}
+              subscriptions={subs}
+              debtAccounts={accounts}
+              ccPayments={ccPayments}
+              savingsGoal={Number(savingsAmount) || 0}
+              variableSpending={totalSpending}
+              exchangeRate={exchangeRate}
+            />
+          )}
+
           {/* Income */}
           <SectionCard
             icon={DollarSign}
