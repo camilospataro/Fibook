@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFinanceStore } from '@/store/useFinanceStore';
-import { formatCOP, formatDate, getCurrentMonth } from '@/lib/formatters';
+import { formatCOP, formatDate, getCurrentMonth, formatCurrency } from '@/lib/formatters';
+import { Check } from 'lucide-react';
 
 const categoryEmoji: Record<string, string> = {
   groceries: '🛒', transport: '🚗', food: '🍔', entertainment: '🎮',
@@ -149,7 +150,33 @@ export default function MonthlySpending() {
           </div>
         )}
 
-        {monthEntries.length === 0 && budgetRows.length === 0 && (
+        {/* Fixed expenses — paid / unpaid status */}
+        {fixedExpenses.length > 0 && (
+          <div className="space-y-1.5 mb-4">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Bills & Fixed Expenses</p>
+            {fixedExpenses.map(exp => {
+              const paid = monthEntries.some(e => e.linkedBudgetId === exp.id);
+              return (
+                <div key={exp.id} className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${paid ? 'bg-primary/20' : 'bg-secondary'}`}>
+                      {paid && <Check className="w-3 h-3 text-primary" />}
+                    </div>
+                    <span className={`text-sm ${paid ? 'text-foreground' : 'text-muted-foreground'}`}>{exp.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">{formatCurrency(exp.amount, exp.currency)}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${paid ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                      {paid ? 'Paid' : 'Pending'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {monthEntries.length === 0 && budgetRows.length === 0 && fixedExpenses.length === 0 && (
           <p className="text-muted-foreground text-sm">No spending recorded this month.</p>
         )}
 
