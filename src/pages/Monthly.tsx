@@ -193,7 +193,7 @@ export default function Monthly() {
     return Object.fromEntries(state.map(a => [a.id, a.balance]));
   }, [monthMode, currentSnapshot, accounts, monthOffset, recurringCharges, exchangeRate]);
 
-  // Effective checking balances per account
+  // Effective checking balances per account — tracks per-account flows via linkedAccountId
   const effectiveCheckingBalances = useMemo<Record<string, number>>(() => {
     if (monthMode === 'current') {
       return Object.fromEntries(checkingAccounts.map(a => [a.id, a.currentBalance]));
@@ -202,26 +202,61 @@ export default function Monthly() {
       const snapMap = new Map(currentSnapshot.checkingBalances.map(c => [c.accountId, c.balance]));
       return Object.fromEntries(checkingAccounts.map(a => [a.id, snapMap.get(a.id) ?? a.currentBalance]));
     }
-    // Future: project total checking forward by monthly surplus, distribute proportionally
-    const monthlyInc = totalMonthlyIncome(incomeSources, exchangeRate);
-    const monthlyFixed = totalFixedExpenses(fixedExpenses, exchangeRate);
-    const monthlySubs = totalSubscriptionsCOP(subs, exchangeRate);
-    const monthlyDebtPay = accounts.reduce((s, a) => {
-      const pay = a.currency === 'USD' ? (a.monthlyPayment || a.minimumMonthlyPayment) * exchangeRate : (a.monthlyPayment || a.minimumMonthlyPayment);
-      return s + pay;
-    }, 0);
-    const netPerMonth = monthlyInc - monthlyFixed - monthlySubs - monthlyDebtPay - savingsTarget;
-    const totalNow = checkingAccounts.reduce((s, a) =>
-      s + (a.currency === 'USD' ? a.currentBalance * exchangeRate : a.currentBalance), 0);
-    const offset = monthMode === 'past' ? monthOffset : monthOffset; // same formula works for past without snapshot
-    const projectedTotal = totalNow + netPerMonth * offset;
-    return Object.fromEntries(checkingAccounts.map(a => {
-      const copBal = a.currency === 'USD' ? a.currentBalance * exchangeRate : a.currentBalance;
-      const share = totalNow > 0 ? copBal / totalNow : 1 / Math.max(1, checkingAccounts.length);
-      const projected = share * projectedTotal;
-      return [a.id, a.currency === 'USD' ? projected / exchangeRate : projected];
-    }));
-  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, savingsTarget, monthOffset]);
+
+    // Project per-account using linked relationships
+    const checkingIds = new Set(checkingAccounts.map(a => a.id));
+    const state = checkingAccounts.map(a => ({ id: a.id, balance: a.currentBalance, currency: a.currency }));
+
+    const absOffset = Math.abs(monthOffset);
+    const direction = monthOffset > 0 ? 1 : -1; // +1 future, -1 past without snapshot
+
+    for (let m = 0; m < absOffset; m++) {
+      // Income deposits to linked checking accounts
+      for (const src of incomeSources) {
+        if (!src.linkedAccountId || !checkingIds.has(src.linkedAccountId)) continue;
+        const acc = state.find(a => a.id === src.linkedAccountId)!;
+        const amt = src.currency === acc.currency ? src.amount
+          : src.currency === 'USD' ? src.amount * exchangeRate
+          : src.amount / exchangeRate;
+        acc.balance += amt * direction;
+      }
+
+      // Debt payments from linked checking accounts
+      for (const debt of accounts) {
+        if (!debt.linkedAccountId || !checkingIds.has(debt.linkedAccountId)) continue;
+        const acc = state.find(a => a.id === debt.linkedAccountId)!;
+        const payment = debt.monthlyPayment || debt.minimumMonthlyPayment;
+        const amt = debt.currency === acc.currency ? payment
+          : debt.currency === 'USD' ? payment * exchangeRate
+          : payment / exchangeRate;
+        acc.balance -= amt * direction;
+      }
+
+      // Fixed expenses (auto) from linked checking accounts
+      for (const exp of fixedExpenses) {
+        if (exp.paymentMode !== 'auto' || !exp.linkedAccountId || !checkingIds.has(exp.linkedAccountId)) continue;
+        const acc = state.find(a => a.id === exp.linkedAccountId)!;
+        const amt = exp.currency === acc.currency ? exp.amount
+          : exp.currency === 'USD' ? exp.amount * exchangeRate
+          : exp.amount / exchangeRate;
+        acc.balance -= amt * direction;
+      }
+
+      // Subscriptions (active) from linked checking accounts
+      for (const sub of subs) {
+        if (!sub.active || !sub.linkedAccountId || !checkingIds.has(sub.linkedAccountId)) continue;
+        const acc = state.find(a => a.id === sub.linkedAccountId)!;
+        let cost = sub.amount;
+        if (sub.billingCycle === 'annual') cost /= 12;
+        const amt = sub.currency === acc.currency ? cost
+          : sub.currency === 'USD' ? cost * exchangeRate
+          : cost / exchangeRate;
+        acc.balance -= amt * direction;
+      }
+    }
+
+    return Object.fromEntries(state.map(a => [a.id, a.balance]));
+  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, monthOffset]);
 
   // ─── Calculations (using effective balances) ──────────
   const totalIncome = incomeSources.reduce((sum, src) => {
