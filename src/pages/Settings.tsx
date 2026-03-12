@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import ThemeSettings from '@/components/layout/ThemeSwitcher';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -98,6 +99,9 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+
+      {/* Theme */}
+      <ThemeSettings />
 
       {/* Import from Excel */}
       <Card className="bg-card border-border">

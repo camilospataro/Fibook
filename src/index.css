@@ -176,9 +176,4 @@
   border-color: #3F3F46 !important;
 }
 
-/* Theme switcher top-bar offset */
-body.theme-cyber,
-body.theme-glass,
-body.theme-mono {
-  padding-top: 44px;
-}
+/* Theme class anchors (used by theme-specific styles above) */

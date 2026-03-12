@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type ThemeId = 1 | 2 | 3;
 
-const themes: Record<ThemeId, { name: string; description: string; vars: Record<string, string> }> = {
+const STORAGE_KEY = 'fibook-theme';
+
+const themes: Record<ThemeId, { name: string; description: string; preview: string[]; vars: Record<string, string> }> = {
   1: {
     name: 'Cyber Fintech',
-    description: 'Current — neon teal, sharp dark panels',
+    description: 'Neon teal, sharp dark panels',
+    preview: ['#00D4AA', '#4F8EF7', '#FF6B6B'],
     vars: {
       '--radius': '0.625rem',
       '--background': '#0A0F1E',
@@ -44,17 +48,12 @@ const themes: Record<ThemeId, { name: string; description: string; vars: Record<
       '--expense': '#FF6B6B',
       '--warning': '#FBBF24',
       '--info': '#4F8EF7',
-      // Design style tokens
-      '--card-shadow': 'none',
-      '--card-border-width': '1px',
-      '--card-backdrop': 'none',
-      '--heading-weight': '700',
-      '--card-border-style': 'solid',
     },
   },
   2: {
     name: 'Glass Luxe',
     description: 'Frosted glass, soft gradients, purple tones',
+    preview: ['#A78BFA', '#F472B6', '#34D399'],
     vars: {
       '--radius': '1rem',
       '--background': '#0C0A1D',
@@ -93,17 +92,12 @@ const themes: Record<ThemeId, { name: string; description: string; vars: Record<
       '--expense': '#FB7185',
       '--warning': '#FBBF24',
       '--info': '#A78BFA',
-      // Design style tokens
-      '--card-shadow': '0 8px 32px rgba(139, 92, 246, 0.1)',
-      '--card-border-width': '1px',
-      '--card-backdrop': 'blur(12px)',
-      '--heading-weight': '600',
-      '--card-border-style': 'solid',
     },
   },
   3: {
     name: 'Midnight Mono',
     description: 'Crisp minimal, high contrast, monospace feel',
+    preview: ['#F59E0B', '#22D3EE', '#EF4444'],
     vars: {
       '--radius': '0.375rem',
       '--background': '#09090B',
@@ -142,84 +136,78 @@ const themes: Record<ThemeId, { name: string; description: string; vars: Record<
       '--expense': '#EF4444',
       '--warning': '#F59E0B',
       '--info': '#22D3EE',
-      // Design style tokens
-      '--card-shadow': 'none',
-      '--card-border-width': '1px',
-      '--card-backdrop': 'none',
-      '--heading-weight': '800',
-      '--card-border-style': 'solid',
     },
   },
 };
 
-export default function ThemeSwitcher() {
-  const [active, setActive] = useState<ThemeId>(1);
+function applyTheme(id: ThemeId) {
+  const root = document.documentElement;
+  const vars = themes[id].vars;
+  for (const [key, value] of Object.entries(vars)) {
+    root.style.setProperty(key, value);
+  }
+  const body = document.body;
+  body.classList.remove('theme-cyber', 'theme-glass', 'theme-mono');
+  if (id === 1) body.classList.add('theme-cyber');
+  if (id === 2) body.classList.add('theme-glass');
+  if (id === 3) body.classList.add('theme-mono');
+}
+
+/** Apply saved theme on app load (call once from AppLayout) */
+export function initTheme() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved && [1, 2, 3].includes(Number(saved))) {
+    applyTheme(Number(saved) as ThemeId);
+  }
+}
+
+/** Settings section component */
+export default function ThemeSettings() {
+  const [active, setActive] = useState<ThemeId>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved && [1, 2, 3].includes(Number(saved)) ? (Number(saved) as ThemeId) : 1;
+  });
 
   useEffect(() => {
-    const root = document.documentElement;
-    const vars = themes[active].vars;
-
-    // Apply all CSS variables
-    for (const [key, value] of Object.entries(vars)) {
-      root.style.setProperty(key, value);
-    }
-
-    // Apply design-style classes on body
-    const body = document.body;
-    body.classList.remove('theme-cyber', 'theme-glass', 'theme-mono');
-    if (active === 1) body.classList.add('theme-cyber');
-    if (active === 2) body.classList.add('theme-glass');
-    if (active === 3) body.classList.add('theme-mono');
-
-    return () => {
-      // Cleanup: remove inline styles when unmounted
-      for (const key of Object.keys(vars)) {
-        root.style.removeProperty(key);
-      }
-      body.classList.remove('theme-cyber', 'theme-glass', 'theme-mono');
-    };
+    applyTheme(active);
+    localStorage.setItem(STORAGE_KEY, String(active));
   }, [active]);
 
-  const previewColors: Record<ThemeId, string[]> = {
-    1: ['#00D4AA', '#4F8EF7', '#FF6B6B', '#0A0F1E'],
-    2: ['#A78BFA', '#F472B6', '#34D399', '#0C0A1D'],
-    3: ['#F59E0B', '#22D3EE', '#EF4444', '#09090B'],
-  };
-
   return (
-    <div
-      className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-3 px-4 py-2"
-      style={{
-        background: 'rgba(0,0,0,0.85)',
-        backdropFilter: 'blur(8px)',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-      }}
-    >
-      <span className="text-xs text-white/50 mr-2 hidden sm:inline">Theme:</span>
-      {([1, 2, 3] as ThemeId[]).map(id => (
-        <button
-          key={id}
-          onClick={() => setActive(id)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-          style={{
-            background: active === id ? 'rgba(255,255,255,0.15)' : 'transparent',
-            border: active === id ? '1px solid rgba(255,255,255,0.3)' : '1px solid transparent',
-            color: active === id ? '#fff' : 'rgba(255,255,255,0.5)',
-          }}
-        >
-          <div className="flex gap-0.5">
-            {previewColors[id].slice(0, 3).map((c, i) => (
-              <div
-                key={i}
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ background: c }}
-              />
-            ))}
-          </div>
-          <span className="hidden sm:inline">{themes[id].name}</span>
-          <span className="sm:hidden">{id}</span>
-        </button>
-      ))}
-    </div>
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Theme</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {([1, 2, 3] as ThemeId[]).map(id => {
+          const t = themes[id];
+          const isActive = active === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActive(id)}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
+                isActive
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border bg-secondary/30 hover:bg-secondary/60'
+              }`}
+            >
+              <div className="flex gap-1">
+                {t.preview.map((c, i) => (
+                  <div key={i} className="w-4 h-4 rounded-full" style={{ background: c }} />
+                ))}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>{t.name}</p>
+                <p className="text-[11px] text-muted-foreground">{t.description}</p>
+              </div>
+              {isActive && (
+                <span className="text-xs text-primary font-medium">Active</span>
+              )}
+            </button>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }

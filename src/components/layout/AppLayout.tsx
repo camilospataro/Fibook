@@ -4,13 +4,15 @@ import { supabase } from '@/lib/supabase';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
-import ThemeSwitcher from './ThemeSwitcher';
+import { initTheme } from './ThemeSwitcher';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const fetchAll = useFinanceStore(s => s.fetchAll);
   const processScheduledPayments = useFinanceStore(s => s.processScheduledPayments);
   const userId = useFinanceStore(s => s.userId);
   const loading = useFinanceStore(s => s.loading);
+
+  useEffect(() => { initTheme(); }, []);
 
   useEffect(() => {
     if (!userId) {
@@ -34,15 +36,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
-      <ThemeSwitcher />
-      <div className="min-h-screen bg-background flex">
-        <Sidebar />
-        <main className="flex-1 pb-16 md:pb-0 overflow-y-auto">
-          {children}
-        </main>
-        <BottomNav />
-      </div>
-    </>
+    <div className="min-h-screen bg-background flex">
+      <Sidebar />
+      <main className="flex-1 pb-16 md:pb-0 overflow-y-auto">
+        {children}
+      </main>
+      <BottomNav />
+    </div>
   );
 }
