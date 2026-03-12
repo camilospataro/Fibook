@@ -82,6 +82,7 @@ export interface MonthlySnapshot {
   userId: string;
   month: string;
   debtBalances: { accountId: string; balance: number }[];
+  checkingBalances: { accountId: string; balance: number }[];
   incomeEntries: { sourceId: string; amount: number }[];
   sideIncome: number;
   totalIncome: number;

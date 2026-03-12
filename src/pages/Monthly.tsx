@@ -12,7 +12,10 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatCurrency, formatDate, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
-import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP } from '@/lib/calculations';
+import {
+  totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP,
+  totalMonthlyIncome, newChargesPerDebtAccount,
+} from '@/lib/calculations';
 import { toast } from 'sonner';
 import type { ExpenseCategory } from '@/types';
 
@@ -39,6 +42,10 @@ export default function Monthly() {
   const [aiUpdateOpen, setAiUpdateOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth);
   const currentMonth = selectedMonth;
+  const nowMonth = getCurrentMonth();
+  const monthMode: 'current' | 'past' | 'future' =
+    currentMonth === nowMonth ? 'current' : currentMonth < nowMonth ? 'past' : 'future';
+  const isReadOnly = monthMode !== 'current';
 
   function shiftMonth(delta: number) {
     setSelectedMonth(prev => {
@@ -46,6 +53,8 @@ export default function Monthly() {
       const d = new Date(y, m - 1 + delta);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     });
+    setEditingSections(new Set());
+    setExpandedId(null);
   }
 
   // Tab view
@@ -139,16 +148,91 @@ export default function Monthly() {
   }, [filteredSubs]);
   const existingGroups = useMemo(() => [...new Set(subs.map(s => s.group || 'General'))].sort(), [subs]);
 
-  // Calculations
+  // ─── Month-aware effective balances ─────────────────────
+  const selectedCalendarMonth = Number(currentMonth.split('-')[1]);
+
+  // How many months ahead/behind from now
+  const monthOffset = useMemo(() => {
+    const [ny, nm] = nowMonth.split('-').map(Number);
+    const [sy, sm] = currentMonth.split('-').map(Number);
+    return (sy - ny) * 12 + (sm - nm);
+  }, [currentMonth, nowMonth]);
+
+  // Recurring charges per debt account (for projections)
+  const recurringCharges = useMemo(
+    () => newChargesPerDebtAccount(accounts, subs, fixedExpenses, exchangeRate),
+    [accounts, subs, fixedExpenses, exchangeRate],
+  );
+
+  // Effective debt balances per account for the selected month
+  const effectiveDebtBalances = useMemo<Record<string, number>>(() => {
+    if (monthMode === 'current') {
+      return Object.fromEntries(accounts.map(a => [a.id, a.currentBalance]));
+    }
+    if (monthMode === 'past' && currentSnapshot) {
+      const snapMap = new Map(currentSnapshot.debtBalances.map(d => [d.accountId, d.balance]));
+      return Object.fromEntries(accounts.map(a => [a.id, snapMap.get(a.id) ?? a.currentBalance]));
+    }
+    // Future: simulate debt payoff month by month
+    const state = accounts.map(a => {
+      const chargesCOP = recurringCharges.get(a.id) ?? 0;
+      // Convert COP charges back to account currency for simulation
+      const chargesNative = a.currency === 'USD' ? chargesCOP / exchangeRate : chargesCOP;
+      return {
+        id: a.id,
+        balance: a.currentBalance,
+        payment: a.monthlyPayment || a.minimumMonthlyPayment,
+        newCharges: chargesNative,
+      };
+    });
+    for (let m = 0; m < monthOffset; m++) {
+      for (const a of state) {
+        a.balance = Math.max(0, a.balance + a.newCharges - a.payment);
+      }
+    }
+    return Object.fromEntries(state.map(a => [a.id, a.balance]));
+  }, [monthMode, currentSnapshot, accounts, monthOffset, recurringCharges, exchangeRate]);
+
+  // Effective checking balances per account
+  const effectiveCheckingBalances = useMemo<Record<string, number>>(() => {
+    if (monthMode === 'current') {
+      return Object.fromEntries(checkingAccounts.map(a => [a.id, a.currentBalance]));
+    }
+    if (monthMode === 'past' && currentSnapshot?.checkingBalances?.length) {
+      const snapMap = new Map(currentSnapshot.checkingBalances.map(c => [c.accountId, c.balance]));
+      return Object.fromEntries(checkingAccounts.map(a => [a.id, snapMap.get(a.id) ?? a.currentBalance]));
+    }
+    // Future: project total checking forward by monthly surplus, distribute proportionally
+    const monthlyInc = totalMonthlyIncome(incomeSources, exchangeRate);
+    const monthlyFixed = totalFixedExpenses(fixedExpenses, exchangeRate);
+    const monthlySubs = totalSubscriptionsCOP(subs, exchangeRate);
+    const monthlyDebtPay = accounts.reduce((s, a) => {
+      const pay = a.currency === 'USD' ? (a.monthlyPayment || a.minimumMonthlyPayment) * exchangeRate : (a.monthlyPayment || a.minimumMonthlyPayment);
+      return s + pay;
+    }, 0);
+    const netPerMonth = monthlyInc - monthlyFixed - monthlySubs - monthlyDebtPay - savingsTarget;
+    const totalNow = checkingAccounts.reduce((s, a) =>
+      s + (a.currency === 'USD' ? a.currentBalance * exchangeRate : a.currentBalance), 0);
+    const offset = monthMode === 'past' ? monthOffset : monthOffset; // same formula works for past without snapshot
+    const projectedTotal = totalNow + netPerMonth * offset;
+    return Object.fromEntries(checkingAccounts.map(a => {
+      const copBal = a.currency === 'USD' ? a.currentBalance * exchangeRate : a.currentBalance;
+      const share = totalNow > 0 ? copBal / totalNow : 1 / Math.max(1, checkingAccounts.length);
+      const projected = share * projectedTotal;
+      return [a.id, a.currency === 'USD' ? projected / exchangeRate : projected];
+    }));
+  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, savingsTarget, monthOffset]);
+
+  // ─── Calculations (using effective balances) ──────────
   const totalIncome = incomeSources.reduce((sum, src) => {
     const amt = Number(incomeAmounts[src.id]) || 0;
     return sum + (src.currency === 'USD' ? amt * exchangeRate : amt);
   }, 0) + (Number(sideIncome) || 0);
   const fixed = totalFixedExpenses(fixedExpenses, exchangeRate);
-  const subsCost = totalSubscriptionsCOP(subs, exchangeRate, new Date().getMonth() + 1);
+  const subsCost = totalSubscriptionsCOP(subs, exchangeRate, selectedCalendarMonth);
   const debtMin = totalMinimumPaymentsCOP(accounts, exchangeRate);
   const totalDebt = accounts.reduce((sum, acc) => {
-    const bal = Number(debtBalances[acc.id]) || 0;
+    const bal = effectiveDebtBalances[acc.id] ?? acc.currentBalance;
     return sum + (acc.currency === 'USD' ? bal * exchangeRate : bal);
   }, 0);
   const totalSpending = monthlySpending.reduce((sum, e) => sum + e.amount, 0);
@@ -159,8 +243,10 @@ export default function Monthly() {
   const totalExpenses = fixed + subsCost + debtPaid + totalSpending;
   const savingsVal = Number(savingsAmount) || 0;
   const balance = totalIncome - totalExpenses - savingsVal;
-  const totalChecking = checkingAccounts.reduce((sum, acc) =>
-    sum + (acc.currency === 'USD' ? acc.currentBalance * exchangeRate : acc.currentBalance), 0);
+  const totalChecking = checkingAccounts.reduce((sum, acc) => {
+    const bal = effectiveCheckingBalances[acc.id] ?? acc.currentBalance;
+    return sum + (acc.currency === 'USD' ? bal * exchangeRate : bal);
+  }, 0);
 
   // Handlers
   async function handleAddExpense() {
@@ -205,14 +291,16 @@ export default function Monthly() {
     toast.success('Deleted');
   }
 
-  // Auto-save snapshot (debounced)
+  // Auto-save snapshot (debounced) — only for current month
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(null);
   const autoSave = useCallback(() => {
+    if (isReadOnly) return; // Don't save snapshots for past/future months
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveSnapshot({
         month: currentMonth,
         debtBalances: accounts.map(a => ({ accountId: a.id, balance: Number(debtBalances[a.id]) || 0 })),
+        checkingBalances: checkingAccounts.map(a => ({ accountId: a.id, balance: a.currentBalance })),
         incomeEntries: incomeSources.map(s => ({ sourceId: s.id, amount: Number(incomeAmounts[s.id]) || 0 })),
         sideIncome: Number(sideIncome) || 0,
         totalIncome, totalExpenses, totalDebtPaid: debtPaid, newCharges: ccCharges,
@@ -220,7 +308,7 @@ export default function Monthly() {
       });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalIncome, totalExpenses, debtPaid, ccCharges, balance, savingsAmount, sideIncome, debtBalances, incomeAmounts, currentMonth]);
+  }, [totalIncome, totalExpenses, debtPaid, ccCharges, balance, savingsAmount, sideIncome, debtBalances, incomeAmounts, currentMonth, isReadOnly]);
 
   // Trigger auto-save when calculated values change
   const mounted = useRef(false);
@@ -235,22 +323,26 @@ export default function Monthly() {
       <div>
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Monthly Update</h1>
-          <Button
-            size="sm"
-            onClick={() => setAiUpdateOpen(true)}
-            className="gap-1.5"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span className="hidden sm:inline">AI Update</span>
-          </Button>
+          {!isReadOnly && (
+            <Button
+              size="sm"
+              onClick={() => setAiUpdateOpen(true)}
+              className="gap-1.5"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline">AI Update</span>
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-3 mt-1">
           <button onClick={() => shiftMonth(-1)} className="text-muted-foreground hover:text-foreground transition-colors">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className={`text-sm min-w-[140px] text-center font-medium ${currentMonth === getCurrentMonth() ? 'text-primary' : 'text-muted-foreground'}`}>
-            {formatMonthLabel(currentMonth)}{currentMonth === getCurrentMonth() && ' (now)'}
+          <span className={`text-sm min-w-[140px] text-center font-medium ${monthMode === 'current' ? 'text-primary' : 'text-muted-foreground'}`}>
+            {formatMonthLabel(currentMonth)}{monthMode === 'current' && ' (now)'}
           </span>
+          {monthMode === 'past' && <Badge variant="secondary" className="text-[10px]">Historical</Badge>}
+          {monthMode === 'future' && <Badge variant="outline" className="text-[10px] border-warning text-warning">Projected</Badge>}
           <button onClick={() => shiftMonth(1)} className="text-muted-foreground hover:text-foreground transition-colors">
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -296,14 +388,14 @@ export default function Monthly() {
             subtitleColor="text-primary"
             open={openSections.checking}
             onToggle={() => toggle('checking')}
-            editing={isEditing('checking')}
-            onEditToggle={() => toggleSectionEdit('checking')}
-            onAdd={isEditing('checking') ? () => setShowAddChecking(true) : undefined}
+            editing={!isReadOnly && isEditing('checking')}
+            onEditToggle={isReadOnly ? undefined : () => toggleSectionEdit('checking')}
+            onAdd={!isReadOnly && isEditing('checking') ? () => setShowAddChecking(true) : undefined}
           >
             {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
             {checkingAccounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={isEditing('checking') ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
-                onEdit={isEditing('checking') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
+              <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('checking') ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
+                onEdit={!isReadOnly && isEditing('checking') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -320,16 +412,16 @@ export default function Monthly() {
                   <span className="text-sm truncate">{acc.name}</span>
                   <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
                 </div>
-                <span className="text-sm font-medium shrink-0">{formatCurrency(acc.currentBalance, acc.currency)}</span>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(effectiveCheckingBalances[acc.id] ?? acc.currentBalance, acc.currency)}</span>
               </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className={`flex items-center justify-between py-1 ${isEditing('checking') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
-              onClick={isEditing('checking') ? () => toggleExpand('savings-goal') : undefined}>
+            <div className={`flex items-center justify-between py-1 ${!isReadOnly && isEditing('checking') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
+              onClick={!isReadOnly && isEditing('checking') ? () => toggleExpand('savings-goal') : undefined}>
               <span className="text-xs text-muted-foreground">Monthly savings goal</span>
               <span className="text-sm font-medium">{formatCOP(Number(savingsAmount) || 0)}</span>
             </div>
-            {isEditing('checking') && expandedId === 'savings-goal' && (
+            {!isReadOnly && isEditing('checking') && expandedId === 'savings-goal' && (
               <div className="pb-2 pt-1">
                 <Input type="number" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} onBlur={saveSavingsTarget} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Monthly savings goal" />
               </div>
@@ -343,14 +435,14 @@ export default function Monthly() {
             subtitle={formatCOP(totalDebt)}
             open={openSections.debt}
             onToggle={() => toggle('debt')}
-            editing={isEditing('debt')}
-            onEditToggle={() => toggleSectionEdit('debt')}
-            onAdd={isEditing('debt') ? () => setShowAddDebt(true) : undefined}
+            editing={!isReadOnly && isEditing('debt')}
+            onEditToggle={isReadOnly ? undefined : () => toggleSectionEdit('debt')}
+            onAdd={!isReadOnly && isEditing('debt') ? () => setShowAddDebt(true) : undefined}
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
             {accounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={isEditing('debt') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
-                onEdit={isEditing('debt') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
+              <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('debt') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+                onEdit={!isReadOnly && isEditing('debt') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateDebtAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -367,7 +459,7 @@ export default function Monthly() {
                   <span className="text-sm truncate">{acc.name}</span>
                   <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
                 </div>
-                <span className="text-sm font-medium shrink-0">{formatCurrency(acc.currentBalance, acc.currency)}</span>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(effectiveDebtBalances[acc.id] ?? acc.currentBalance, acc.currency)}</span>
               </ItemRow>
             ))}
           </SectionCard>
@@ -404,14 +496,14 @@ export default function Monthly() {
             subtitleColor="text-income"
             open={openSections.income}
             onToggle={() => toggle('income')}
-            editing={isEditing('income')}
-            onEditToggle={() => toggleSectionEdit('income')}
-            onAdd={isEditing('income') ? () => setShowAddIncome(true) : undefined}
+            editing={!isReadOnly && isEditing('income')}
+            onEditToggle={isReadOnly ? undefined : () => toggleSectionEdit('income')}
+            onAdd={!isReadOnly && isEditing('income') ? () => setShowAddIncome(true) : undefined}
           >
             {incomeSources.length === 0 && <EmptyState text="No income sources" />}
             {incomeSources.map(src => (
-              <ItemRow key={src.id} onDelete={isEditing('income') ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
-                onEdit={isEditing('income') ? () => toggleExpand(src.id) : undefined} expanded={expandedId === src.id}
+              <ItemRow key={src.id} onDelete={!isReadOnly && isEditing('income') ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
+                onEdit={!isReadOnly && isEditing('income') ? () => toggleExpand(src.id) : undefined} expanded={expandedId === src.id}
                 editContent={
                   <div className="pb-3 pt-1 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={src.name} onBlur={e => { if (e.target.value !== src.name) store.updateIncomeSource(src.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -434,12 +526,12 @@ export default function Monthly() {
               </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className={`flex items-center justify-between py-1 ${isEditing('income') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
-              onClick={isEditing('income') ? () => toggleExpand('side-income') : undefined}>
+            <div className={`flex items-center justify-between py-1 ${!isReadOnly && isEditing('income') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
+              onClick={!isReadOnly && isEditing('income') ? () => toggleExpand('side-income') : undefined}>
               <span className="text-sm text-muted-foreground">Side Income</span>
               <span className="text-sm font-medium">{formatCOP(Number(sideIncome) || 0)}</span>
             </div>
-            {isEditing('income') && expandedId === 'side-income' && (
+            {!isReadOnly && isEditing('income') && expandedId === 'side-income' && (
               <div className="pb-2 pt-1">
                 <Input type="number" value={sideIncome} onChange={e => setSideIncome(e.target.value)} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Side income amount" />
               </div>
@@ -454,14 +546,14 @@ export default function Monthly() {
             subtitleColor="text-destructive"
             open={openSections.expenses}
             onToggle={() => toggle('expenses')}
-            editing={isEditing('expenses')}
-            onEditToggle={() => toggleSectionEdit('expenses')}
-            onAdd={isEditing('expenses') ? () => setShowAddExpense(true) : undefined}
+            editing={!isReadOnly && isEditing('expenses')}
+            onEditToggle={isReadOnly ? undefined : () => toggleSectionEdit('expenses')}
+            onAdd={!isReadOnly && isEditing('expenses') ? () => setShowAddExpense(true) : undefined}
           >
             {fixedExpenses.length === 0 && <EmptyState text="No fixed expenses yet" />}
             {fixedExpenses.map(exp => (
-              <ItemRow key={exp.id} onDelete={isEditing('expenses') ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
-                onEdit={isEditing('expenses') ? () => toggleExpand(exp.id) : undefined} expanded={expandedId === exp.id}
+              <ItemRow key={exp.id} onDelete={!isReadOnly && isEditing('expenses') ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
+                onEdit={!isReadOnly && isEditing('expenses') ? () => toggleExpand(exp.id) : undefined} expanded={expandedId === exp.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={exp.name} onBlur={e => { if (e.target.value !== exp.name) store.updateFixedExpense(exp.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -503,9 +595,9 @@ export default function Monthly() {
             subtitleColor="text-destructive"
             open={openSections.subscriptions}
             onToggle={() => toggle('subscriptions')}
-            editing={isEditing('subscriptions')}
-            onEditToggle={() => toggleSectionEdit('subscriptions')}
-            onAdd={isEditing('subscriptions') ? () => setShowAddSub(true) : undefined}
+            editing={!isReadOnly && isEditing('subscriptions')}
+            onEditToggle={isReadOnly ? undefined : () => toggleSectionEdit('subscriptions')}
+            onAdd={!isReadOnly && isEditing('subscriptions') ? () => setShowAddSub(true) : undefined}
           >
             {/* Monthly / Annual toggle */}
             <div className="flex rounded-lg bg-secondary/50 p-0.5 mb-3">
@@ -540,8 +632,8 @@ export default function Monthly() {
                   </span>
                 </div>
                 {groupSubs.map(sub => (
-                  <ItemRow key={sub.id} onDelete={isEditing('subscriptions') ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
-                    onEdit={isEditing('subscriptions') ? () => toggleExpand(sub.id) : undefined} expanded={expandedId === sub.id}
+                  <ItemRow key={sub.id} onDelete={!isReadOnly && isEditing('subscriptions') ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
+                    onEdit={!isReadOnly && isEditing('subscriptions') ? () => toggleExpand(sub.id) : undefined} expanded={expandedId === sub.id}
                     editContent={
                       <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
                         <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={sub.name} onBlur={e => { if (e.target.value !== sub.name) store.updateSubscription(sub.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -602,9 +694,9 @@ export default function Monthly() {
             subtitleColor="text-destructive"
             open={openSections.debtPayments}
             onToggle={() => toggle('debtPayments')}
-            editing={isEditing('debtPayments')}
-            onEditToggle={() => toggleSectionEdit('debtPayments')}
-            onAdd={isEditing('debtPayments') ? () => setShowAddDebt(true) : undefined}
+            editing={!isReadOnly && isEditing('debtPayments')}
+            onEditToggle={isReadOnly ? undefined : () => toggleSectionEdit('debtPayments')}
+            onAdd={!isReadOnly && isEditing('debtPayments') ? () => setShowAddDebt(true) : undefined}
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
             {accounts.length > 0 && (
@@ -614,8 +706,8 @@ export default function Monthly() {
               </div>
             )}
             {accounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={isEditing('debtPayments') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
-                onEdit={isEditing('debtPayments') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
+              <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('debtPayments') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+                onEdit={!isReadOnly && isEditing('debtPayments') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Monthly Payment</label><Input type="number" defaultValue={acc.monthlyPayment || 0} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.monthlyPayment) store.updateDebtAccount(acc.id, { monthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>

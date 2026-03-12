@@ -132,6 +132,7 @@ function mapSnapshot(row: Record<string, unknown>): MonthlySnapshot {
   return {
     id: row.id as string, userId: row.user_id as string, month: row.month as string,
     debtBalances: row.debt_balances as MonthlySnapshot['debtBalances'],
+    checkingBalances: (row.checking_balances as MonthlySnapshot['checkingBalances']) ?? [],
     incomeEntries: row.income_entries as MonthlySnapshot['incomeEntries'],
     sideIncome: row.side_income as number, totalIncome: row.total_income as number,
     totalExpenses: row.total_expenses as number, totalDebtPaid: row.total_debt_paid as number,
@@ -442,6 +443,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!userId) return;
     const row = {
       user_id: userId, month: snapshot.month, debt_balances: snapshot.debtBalances,
+      checking_balances: snapshot.checkingBalances,
       income_entries: snapshot.incomeEntries, side_income: snapshot.sideIncome,
       total_income: snapshot.totalIncome, total_expenses: snapshot.totalExpenses,
       total_debt_paid: snapshot.totalDebtPaid, new_charges: snapshot.newCharges,
