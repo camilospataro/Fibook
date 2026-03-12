@@ -96,7 +96,7 @@ export default function Spending() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex gap-2 items-center overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap scrollbar-none">
         <input
           type="month"
           value={selectedMonth}

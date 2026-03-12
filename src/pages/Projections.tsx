@@ -417,7 +417,7 @@ export default function Projections() {
           <p className="text-xs text-muted-foreground">How your income is allocated each month</p>
         </CardHeader>
         <CardContent>
-          <div className="h-64">
+          <div className="h-48 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={waterfallData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
@@ -449,7 +449,7 @@ export default function Projections() {
             <p className="text-xs text-muted-foreground">Per-account projected balance using your set payments</p>
           </CardHeader>
           <CardContent>
-            <div className="h-64">
+            <div className="h-48 md:h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={debtChartData}>
                   <defs>
@@ -492,7 +492,7 @@ export default function Projections() {
               </ResponsiveContainer>
             </div>
             {/* Legend */}
-            <div className="flex flex-wrap gap-4 mt-3">
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-3">
               {accountMeta.map(a => (
                 <div key={a.id} className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: a.color }} />
@@ -511,7 +511,7 @@ export default function Projections() {
           <p className="text-xs text-muted-foreground">Checking growth vs debt reduction over time</p>
         </CardHeader>
         <CardContent>
-          <div className="h-64">
+          <div className="h-48 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={netWorthData}>
                 <defs>
@@ -548,7 +548,7 @@ export default function Projections() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-wrap gap-4 mt-3">
+          <div className="flex flex-wrap gap-2 sm:gap-4 mt-3">
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-primary" /><span className="text-xs text-muted-foreground">Checking</span></div>
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-destructive" /><span className="text-xs text-muted-foreground">Debt</span></div>
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#4F8EF7' }} /><span className="text-xs text-muted-foreground">Net Worth</span></div>
@@ -566,7 +566,7 @@ export default function Projections() {
             <p className="text-xs text-muted-foreground">Minimum vs current vs aggressive (snowball) strategy</p>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
               <div className="p-3 bg-secondary rounded-lg text-center">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Minimum</p>
                 <p className="font-bold text-sm text-muted-foreground">
@@ -596,7 +596,7 @@ export default function Projections() {
                 )}
               </div>
             </div>
-            <div className="h-56">
+            <div className="h-44 md:h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={scenarios.data}>
                   <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
@@ -619,7 +619,7 @@ export default function Projections() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex flex-wrap gap-4 mt-3">
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-3">
               <div className="flex items-center gap-1.5"><div className="w-6 h-0.5 bg-muted-foreground" style={{ borderTop: '2px dashed #94A3B8' }} /><span className="text-xs text-muted-foreground">Minimum</span></div>
               <div className="flex items-center gap-1.5"><div className="w-6 h-0.5" style={{ backgroundColor: '#4F8EF7' }} /><span className="text-xs text-muted-foreground">Current Plan</span></div>
               <div className="flex items-center gap-1.5"><div className="w-6 h-0.5 bg-primary" /><span className="text-xs text-muted-foreground">Aggressive</span></div>

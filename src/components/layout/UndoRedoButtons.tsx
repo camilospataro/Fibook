@@ -42,7 +42,7 @@ export default function UndoRedoButtons() {
       <button
         onClick={handleUndo}
         disabled={!canUndo}
-        className="p-1.5 rounded-md transition-colors hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed"
+        className="p-2 rounded-md transition-colors hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed"
         title={`Undo (${undoStack.length})`}
       >
         <Undo2 className="w-4 h-4" />
@@ -50,7 +50,7 @@ export default function UndoRedoButtons() {
       <button
         onClick={handleRedo}
         disabled={!canRedo}
-        className="p-1.5 rounded-md transition-colors hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed"
+        className="p-2 rounded-md transition-colors hover:bg-secondary disabled:opacity-30 disabled:cursor-not-allowed"
         title={`Redo (${redoStack.length})`}
       >
         <Redo2 className="w-4 h-4" />

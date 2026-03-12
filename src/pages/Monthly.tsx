@@ -456,11 +456,11 @@ export default function Monthly() {
           <button onClick={() => shiftMonth(-1)} className="text-muted-foreground hover:text-foreground transition-colors">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className={`text-sm min-w-[140px] text-center font-medium ${monthMode === 'current' ? 'text-primary' : 'text-muted-foreground'}`}>
+          <span className={`text-sm min-w-[120px] sm:min-w-[140px] text-center font-medium ${monthMode === 'current' ? 'text-primary' : 'text-muted-foreground'}`}>
             {formatMonthLabel(currentMonth)}{monthMode === 'current' && ' (now)'}
           </span>
-          {monthMode === 'past' && <Badge variant="secondary" className="text-[10px]">Historical</Badge>}
-          {monthMode === 'future' && <Badge variant="outline" className="text-[10px] border-warning text-warning">Projected</Badge>}
+          {monthMode === 'past' && <Badge variant="secondary" className="text-[10px]">Past</Badge>}
+          {monthMode === 'future' && <Badge variant="outline" className="text-[10px] border-warning text-warning">Est.</Badge>}
           <button onClick={() => shiftMonth(1)} className="text-muted-foreground hover:text-foreground transition-colors">
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -515,7 +515,7 @@ export default function Monthly() {
               <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('checking') ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('checking') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
-                  <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                  <div className="pb-3 pt-1 pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Balance</label><Input type="number" defaultValue={acc.currentBalance} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.currentBalance) store.updateCheckingAccount(acc.id, { currentBalance: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
@@ -606,7 +606,7 @@ export default function Monthly() {
               <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('debt') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('debt') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
-                  <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                  <div className="pb-3 pt-1 pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateDebtAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Balance</label><Input type="number" defaultValue={acc.currentBalance} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.currentBalance) store.updateDebtAccount(acc.id, { currentBalance: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
@@ -667,14 +667,14 @@ export default function Monthly() {
               <ItemRow key={src.id} onDelete={!isReadOnly && isEditing('income') ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('income') ? () => toggleExpand(src.id) : undefined} expanded={expandedId === src.id}
                 editContent={
-                  <div className="pb-3 pt-1 grid grid-cols-2 gap-2">
+                  <div className="pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={src.name} onBlur={e => { if (e.target.value !== src.name) store.updateIncomeSource(src.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={src.amount} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== src.amount) store.updateIncomeSource(src.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
                       <Select value={src.currency} onValueChange={v => store.updateIncomeSource(src.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                     <div><label className="text-[10px] text-muted-foreground">Deposit Day</label><Input type="number" min="1" max="31" defaultValue={src.depositDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== src.depositDay) store.updateIncomeSource(src.id, { depositDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div className="col-span-2 flex items-center gap-2"><Switch checked={src.isRecurring} onCheckedChange={v => store.updateIncomeSource(src.id, { isRecurring: v })} /><label className="text-xs text-muted-foreground">Recurring</label></div>
-                    <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Deposit To</label>
+                    <div className="sm:col-span-2"><label className="text-[10px] text-muted-foreground">Deposit To</label>
                       <Select value={src.linkedAccountId ?? 'none'} onValueChange={v => store.updateIncomeSource(src.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                 }
@@ -717,7 +717,7 @@ export default function Monthly() {
               <ItemRow key={exp.id} onDelete={!isReadOnly && isEditing('expenses') ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('expenses') ? () => toggleExpand(exp.id) : undefined} expanded={expandedId === exp.id}
                 editContent={
-                  <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
+                  <div className="pb-3 pt-1 pl-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={exp.name} onBlur={e => { if (e.target.value !== exp.name) store.updateFixedExpense(exp.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={exp.amount} onBlur={e => { const v = Number(e.target.value); if (v !== exp.amount) store.updateFixedExpense(exp.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Currency</label>
@@ -730,11 +730,11 @@ export default function Monthly() {
                       <div><label className="text-[10px] text-muted-foreground">Payment Day</label><Input type="number" min="1" max="31" defaultValue={exp.paymentDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== exp.paymentDay) store.updateFixedExpense(exp.id, { paymentDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     )}
                     {exp.paymentMode === 'auto' && (
-                      <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Charge To</label>
+                      <div className="sm:col-span-2"><label className="text-[10px] text-muted-foreground">Charge To</label>
                         <Select value={exp.linkedAccountId ?? 'none'} onValueChange={v => store.updateFixedExpense(exp.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent></Select></div>
                     )}
                     {exp.paymentMode === 'manual' && (
-                      <div className="col-span-2"><p className="text-[10px] text-muted-foreground italic">Track spending manually via the Spending page</p></div>
+                      <div className="sm:col-span-2"><p className="text-[10px] text-muted-foreground italic">Track spending manually via the Spending page</p></div>
                     )}
                   </div>
                 }
@@ -797,7 +797,7 @@ export default function Monthly() {
                   <ItemRow key={sub.id} onDelete={!isReadOnly && isEditing('subscriptions') ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
                     onEdit={!isReadOnly && isEditing('subscriptions') ? () => toggleExpand(sub.id) : undefined} expanded={expandedId === sub.id}
                     editContent={
-                      <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
+                      <div className="pb-3 pt-1 pl-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={sub.name} onBlur={e => { if (e.target.value !== sub.name) store.updateSubscription(sub.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                         <div><label className="text-[10px] text-muted-foreground">Amount</label><Input type="number" defaultValue={sub.amount} onBlur={e => { const v = Number(e.target.value); if (v !== sub.amount) store.updateSubscription(sub.id, { amount: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                         <div><label className="text-[10px] text-muted-foreground">Currency</label>
@@ -819,7 +819,7 @@ export default function Monthly() {
                             <Select value={String(sub.renewalMonth ?? '')} onValueChange={v => store.updateSubscription(sub.id, { renewalMonth: v ? Number(v) : null })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue placeholder="Month" /></SelectTrigger><SelectContent>{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => <SelectItem key={i+1} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></div>
                         )}
                         <div><label className="text-[10px] text-muted-foreground">Payment Day</label><Input type="number" min="1" max="31" defaultValue={sub.paymentDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== sub.paymentDay) store.updateSubscription(sub.id, { paymentDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                        <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Charge To</label>
+                        <div className="sm:col-span-2"><label className="text-[10px] text-muted-foreground">Charge To</label>
                           <Select value={sub.linkedAccountId ?? 'none'} onValueChange={v => store.updateSubscription(sub.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent></Select></div>
                       </div>
                     }
@@ -875,10 +875,10 @@ export default function Monthly() {
               <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('debtPayments') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('debtPayments') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
-                  <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
+                  <div className="pb-3 pt-1 pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Monthly Payment</label><Input type="number" defaultValue={acc.monthlyPayment || 0} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.monthlyPayment) store.updateDebtAccount(acc.id, { monthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                     <div><label className="text-[10px] text-muted-foreground">Min. Payment</label><Input type="number" defaultValue={acc.minimumMonthlyPayment} onBlur={e => { const v = Number(e.target.value); if (v !== acc.minimumMonthlyPayment) store.updateDebtAccount(acc.id, { minimumMonthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                    <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
+                    <div className="sm:col-span-2"><label className="text-[10px] text-muted-foreground">Pay From</label>
                       <Select value={acc.linkedAccountId ?? 'none'} onValueChange={v => store.updateDebtAccount(acc.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                 }
@@ -895,16 +895,16 @@ export default function Monthly() {
                   </div>
                 </div>
                 {monthMode === 'current' ? (
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="shrink-0">
                     {isConfirming ? (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-wrap justify-end">
                         <Input
                           type="number"
                           value={debtPayAmounts[acc.id] ?? String(acc.monthlyPayment || 0)}
                           onChange={e => setDebtPayAmounts(p => ({ ...p, [acc.id]: e.target.value }))}
-                          className="h-6 w-24 text-xs bg-secondary border-border"
+                          className="h-7 w-20 sm:w-24 text-xs bg-secondary border-border"
                         />
-                        <Button size="sm" variant="destructive" className="h-6 text-[10px] px-2" onClick={async () => {
+                        <Button size="sm" variant="destructive" className="h-7 text-[10px] px-2" onClick={async () => {
                           if (!linkedChecking) { toast.error('No checking account linked'); return; }
                           try {
                             await makeDebtPayment(acc.id, payAmount, linkedChecking.id);
@@ -912,18 +912,18 @@ export default function Monthly() {
                           } catch (err) { toast.error(err instanceof Error ? err.message : 'Payment failed'); }
                           setConfirmDebtPay(null);
                         }}>Pay</Button>
-                        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => setConfirmDebtPay(null)}>Cancel</Button>
+                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" onClick={() => setConfirmDebtPay(null)}>X</Button>
                       </div>
                     ) : (
-                      <>
+                      <div className="flex items-center gap-1.5">
                         <span className="text-sm font-medium">{formatCurrency(acc.monthlyPayment || 0, acc.currency)}</span>
                         {linkedChecking && acc.currentBalance > 0 && (
-                          <Button size="sm" variant="secondary" className="h-6 text-[10px] px-2" onClick={() => {
+                          <Button size="sm" variant="secondary" className="h-7 text-[10px] px-2" onClick={() => {
                             setDebtPayAmounts(p => ({ ...p, [acc.id]: String(acc.monthlyPayment || 0) }));
                             setConfirmDebtPay(acc.id);
                           }}>Pay</Button>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
                 ) : (

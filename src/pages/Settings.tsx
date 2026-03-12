@@ -86,8 +86,8 @@ export default function Settings() {
             </div>
           ) : (
             <>
-              <div className="flex gap-3">
-                <Input type="number" value={rate} onChange={e => setRate(e.target.value)} className="bg-secondary border-border w-40" />
+              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                <Input type="number" value={rate} onChange={e => setRate(e.target.value)} className="bg-secondary border-border flex-1 min-w-[100px]" />
                 <Button onClick={saveRate} size="sm">Save</Button>
                 <Button onClick={() => { setRate(String(settings?.exchangeRate ?? 4000)); setRateLocked(true); }} size="sm" variant="ghost">Cancel</Button>
               </div>

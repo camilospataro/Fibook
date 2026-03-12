@@ -38,11 +38,11 @@ export default function Dashboard() {
       <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Dashboard</h1>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         <KpiCard title="Checking" value={checking} prefix="$" suffix=" COP" icon={Landmark} color="#00D4AA" separator="." />
         <KpiCard title="Savings" value={savingsBalance} prefix="$" suffix=" COP" icon={PiggyBank} color="#00D4AA" separator="." />
-        <KpiCard title="Monthly Income" value={income} prefix="$" suffix=" COP" icon={DollarSign} color="#00D4AA" separator="." />
-        <KpiCard title="Monthly Expenses" value={expenses} prefix="$" suffix=" COP" icon={TrendingDown} color="#FBBF24" separator="." />
+        <KpiCard title="Income" value={income} prefix="$" suffix=" COP" icon={DollarSign} color="#00D4AA" separator="." />
+        <KpiCard title="Expenses" value={expenses} prefix="$" suffix=" COP" icon={TrendingDown} color="#FBBF24" separator="." />
         <KpiCard title="Total Debt" value={debt} prefix="$" suffix=" COP" icon={CreditCard} color="#FF6B6B" separator="." />
       </div>
 
