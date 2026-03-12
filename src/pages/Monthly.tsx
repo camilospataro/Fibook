@@ -95,6 +95,7 @@ export default function Monthly() {
   // Add dialogs
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddSub, setShowAddSub] = useState(false);
+  const [subView, setSubView] = useState<'monthly' | 'annual'>('monthly');
   const [showAddDebt, setShowAddDebt] = useState(false);
   const [showAddChecking, setShowAddChecking] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
@@ -126,15 +127,16 @@ export default function Monthly() {
   const [showRecap, setShowRecap] = useState(false);
 
   // Subscription groups
+  const filteredSubs = useMemo(() => subs.filter(s => subView === 'annual' ? s.billingCycle === 'annual' : s.billingCycle !== 'annual'), [subs, subView]);
   const subGroups = useMemo(() => {
     const groups = new Map<string, typeof subs>();
-    for (const sub of subs) {
+    for (const sub of filteredSubs) {
       const g = sub.group || 'General';
       if (!groups.has(g)) groups.set(g, []);
       groups.get(g)!.push(sub);
     }
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [subs]);
+  }, [filteredSubs]);
   const existingGroups = useMemo(() => [...new Set(subs.map(s => s.group || 'General'))].sort(), [subs]);
 
   // Calculations
@@ -505,7 +507,26 @@ export default function Monthly() {
             onEditToggle={() => toggleSectionEdit('subscriptions')}
             onAdd={isEditing('subscriptions') ? () => setShowAddSub(true) : undefined}
           >
-            {subs.length === 0 && <EmptyState text="No subscriptions yet" />}
+            {/* Monthly / Annual toggle */}
+            <div className="flex rounded-lg bg-secondary/50 p-0.5 mb-3">
+              <button
+                onClick={() => setSubView('monthly')}
+                className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+                  subView === 'monthly' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Monthly ({subs.filter(s => s.billingCycle !== 'annual').length})
+              </button>
+              <button
+                onClick={() => setSubView('annual')}
+                className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+                  subView === 'annual' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Annual ({subs.filter(s => s.billingCycle === 'annual').length})
+              </button>
+            </div>
+            {filteredSubs.length === 0 && <EmptyState text={`No ${subView} subscriptions yet`} />}
             {subGroups.map(([groupName, groupSubs]) => (
               <div key={groupName}>
                 <div className="flex items-center gap-2 mt-2 mb-1 first:mt-0">
