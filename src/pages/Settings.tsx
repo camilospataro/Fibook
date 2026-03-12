@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LogOut, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { LogOut, RefreshCw, FileSpreadsheet, Rocket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchUSDtoCOP } from '@/lib/exchangeRate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { useFinanceStore } from '@/store/useFinanceStore';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import ThemeSettings from '@/components/layout/ThemeSwitcher';
+import OnboardingWizard from '@/components/modals/OnboardingWizard';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function Settings() {
 
   const [refreshingRate, setRefreshingRate] = useState(false);
   const [rateLocked, setRateLocked] = useState(true);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
 
   async function saveRate() {
     await store.updateExchangeRate(Number(rate));
@@ -55,6 +57,21 @@ export default function Settings() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Settings</h1>
+
+      {/* Quick Setup */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Quick Setup</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">New here? Run the guided setup to add your accounts, debts, income, and expenses in a few steps.</p>
+          <Button onClick={() => setOnboardingOpen(true)} variant="secondary" className="w-full">
+            <Rocket className="w-4 h-4 mr-2" />
+            Start Onboarding
+          </Button>
+        </CardContent>
+      </Card>
+      <OnboardingWizard open={onboardingOpen} onOpenChange={setOnboardingOpen} />
 
       {/* Exchange Rate */}
       <Card className="bg-card border-border">
