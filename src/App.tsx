@@ -12,6 +12,7 @@ const Projections = lazy(() => import('@/pages/Projections'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const Import = lazy(() => import('@/pages/Import'));
 const Simulation = lazy(() => import('@/pages/Simulation'));
+const Help = lazy(() => import('@/pages/Help'));
 
 function PageLoader() {
   return (
@@ -41,6 +42,7 @@ function App() {
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/import" element={<Import />} />
                       <Route path="/simulation" element={<Simulation />} />
+                      <Route path="/help" element={<Help />} />
                     </Routes>
                   </Suspense>
                 </AppLayout>
