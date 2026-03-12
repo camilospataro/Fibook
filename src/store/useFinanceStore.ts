@@ -231,7 +231,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { data } = await supabase.from('debt_accounts').insert({
       user_id: userId, name: account.name, currency: account.currency,
       current_balance: account.currentBalance, minimum_monthly_payment: account.minimumMonthlyPayment,
-      monthly_payment: 0, color: account.color, linked_account_id: account.linkedAccountId ?? null,
+      monthly_payment: account.monthlyPayment ?? 0, color: account.color, linked_account_id: account.linkedAccountId ?? null,
     }).select().single();
     if (data) set(s => ({ debtAccounts: [...s.debtAccounts, mapDebt(data)] }));
   },
@@ -502,7 +502,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     for (const item of items) {
       if (processedIds.has(item.sourceId)) continue;
 
-      const debtAccount = debtAccounts.find(a => a.id === item.linkedAccountId);
+      // Use get() for fresh state in case previous iteration updated the same account
+      const debtAccount = get().debtAccounts.find(a => a.id === item.linkedAccountId);
       if (!debtAccount) continue;
 
       // Convert amount if currencies differ
@@ -511,6 +512,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       if (item.currency !== debtAccount.currency) {
         chargeAmount = item.currency === 'USD' ? item.amount * exchangeRate : item.amount / exchangeRate;
       }
+      chargeAmount = Math.round(chargeAmount);
 
       // Add to debt balance
       const newBalance = debtAccount.currentBalance + chargeAmount;
@@ -522,7 +524,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       const { data: spendingData } = await supabase.from('spending').insert({
         user_id: userId, date: spendingDate,
         description: `${item.name} (auto)`,
-        amount: Math.round(chargeAmount),
+        amount: chargeAmount,
         category: item.sourceType === 'subscription' ? 'other' : 'other',
         payment_method: `debt_${debtAccount.id}`,
         linked_account_id: null,
