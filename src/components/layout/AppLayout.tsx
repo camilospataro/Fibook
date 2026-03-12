@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
+import UndoRedoButtons from './UndoRedoButtons';
 import { initTheme } from './ThemeSwitcher';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -39,6 +40,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background flex">
       <Sidebar />
       <main className="flex-1 pb-16 md:pb-0 overflow-y-auto">
+        <UndoRedoButtons />
         {children}
       </main>
       <BottomNav />

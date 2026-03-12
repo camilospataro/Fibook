@@ -3,6 +3,17 @@ import { supabase } from '@/lib/supabase';
 import { fetchUSDtoCOP } from '@/lib/exchangeRate';
 import type { DebtAccount, CheckingAccount, IncomeSource, FixedExpense, Subscription, SpendingEntry, MonthlySnapshot, Settings } from '@/types';
 
+interface DataSnapshot {
+  debtAccounts: DebtAccount[];
+  checkingAccounts: CheckingAccount[];
+  incomeSources: IncomeSource[];
+  fixedExpenses: FixedExpense[];
+  subscriptions: Subscription[];
+  spending: SpendingEntry[];
+  snapshots: MonthlySnapshot[];
+  settings: Settings | null;
+}
+
 interface FinanceState {
   userId: string | null;
   settings: Settings | null;
@@ -14,6 +25,9 @@ interface FinanceState {
   spending: SpendingEntry[];
   snapshots: MonthlySnapshot[];
   loading: boolean;
+  _undoStack: DataSnapshot[];
+  _redoStack: DataSnapshot[];
+  _isUndoRedo: boolean;
 
   setUserId: (id: string | null) => void;
   fetchAll: (userId: string) => Promise<void>;
@@ -60,6 +74,11 @@ interface FinanceState {
 
   // Scheduled payments
   processScheduledPayments: () => Promise<void>;
+
+  // Undo/Redo
+  _pushUndo: () => void;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
 }
 
 function mapSettings(row: Record<string, unknown>): Settings {
@@ -143,6 +162,81 @@ function mapSnapshot(row: Record<string, unknown>): MonthlySnapshot {
   };
 }
 
+// --- Reverse mappers (TS → DB row) for undo/redo sync ---
+function debtToDb(a: DebtAccount) {
+  return { id: a.id, user_id: a.userId, name: a.name, currency: a.currency, current_balance: a.currentBalance, minimum_monthly_payment: a.minimumMonthlyPayment, monthly_payment: a.monthlyPayment, color: a.color, linked_account_id: a.linkedAccountId };
+}
+function checkingToDb(a: CheckingAccount) {
+  return { id: a.id, user_id: a.userId, name: a.name, currency: a.currency, current_balance: a.currentBalance, color: a.color };
+}
+function incomeToDb(s: IncomeSource) {
+  return { id: s.id, user_id: s.userId, name: s.name, amount: s.amount, currency: s.currency, is_recurring: s.isRecurring, linked_account_id: s.linkedAccountId, deposit_day: s.depositDay };
+}
+function expenseToDb(e: FixedExpense) {
+  return { id: e.id, user_id: e.userId, name: e.name, amount: e.amount, currency: e.currency, category: e.category, linked_account_id: e.linkedAccountId, payment_day: e.paymentDay, payment_mode: e.paymentMode };
+}
+function subToDb(s: Subscription) {
+  return { id: s.id, user_id: s.userId, name: s.name, currency: s.currency, amount: s.amount, group: s.group, active: s.active, linked_account_id: s.linkedAccountId, payment_day: s.paymentDay, billing_cycle: s.billingCycle, renewal_month: s.renewalMonth };
+}
+function spendingToDb(e: SpendingEntry) {
+  return { id: e.id, user_id: e.userId, date: e.date, description: e.description, amount: e.amount, category: e.category, payment_method: e.paymentMethod, linked_account_id: e.linkedAccountId, linked_budget_id: e.linkedBudgetId, tags: e.tags };
+}
+function snapshotToDb(s: MonthlySnapshot) {
+  return { id: s.id, user_id: s.userId, month: s.month, debt_balances: s.debtBalances, checking_balances: s.checkingBalances, income_entries: s.incomeEntries, side_income: s.sideIncome, total_income: s.totalIncome, total_expenses: s.totalExpenses, total_debt_paid: s.totalDebtPaid, new_charges: s.newCharges, balance: s.balance, cash_on_hand: s.cashOnHand, savings: s.savings };
+}
+
+async function syncArrayDiffs<T extends { id: string }>(
+  table: string, current: T[], target: T[], toDb: (item: T) => Record<string, unknown>
+) {
+  if (JSON.stringify(current) === JSON.stringify(target)) return;
+  const currentMap = new Map(current.map(i => [i.id, i]));
+  const targetMap = new Map(target.map(i => [i.id, i]));
+  const removedIds = current.filter(i => !targetMap.has(i.id)).map(i => i.id);
+  if (removedIds.length > 0) await supabase.from(table).delete().in('id', removedIds);
+  const upserts: Record<string, unknown>[] = [];
+  for (const [id, item] of targetMap) {
+    const curr = currentMap.get(id);
+    if (!curr || JSON.stringify(curr) !== JSON.stringify(item)) upserts.push(toDb(item));
+  }
+  if (upserts.length > 0) await supabase.from(table).upsert(upserts);
+}
+
+async function syncSettingsDiff(current: Settings | null, target: Settings | null) {
+  if (!target || JSON.stringify(current) === JSON.stringify(target)) return;
+  const row = { exchange_rate: target.exchangeRate, exchange_rate_updated_at: target.exchangeRateUpdatedAt, savings_target: target.savingsTarget, savings_source_account_id: target.savingsSourceAccountId, savings_dest_account_id: target.savingsDestAccountId, savings_transfer_day: target.savingsTransferDay };
+  await supabase.from('settings').update(row).eq('id', target.id);
+}
+
+function captureSnapshot(s: FinanceState): DataSnapshot {
+  return {
+    debtAccounts: structuredClone(s.debtAccounts),
+    checkingAccounts: structuredClone(s.checkingAccounts),
+    incomeSources: structuredClone(s.incomeSources),
+    fixedExpenses: structuredClone(s.fixedExpenses),
+    subscriptions: structuredClone(s.subscriptions),
+    spending: structuredClone(s.spending),
+    snapshots: structuredClone(s.snapshots),
+    settings: s.settings ? structuredClone(s.settings) : null,
+  };
+}
+
+async function syncAllDiffs(current: DataSnapshot, target: DataSnapshot) {
+  try {
+    await Promise.all([
+      syncArrayDiffs('debt_accounts', current.debtAccounts, target.debtAccounts, debtToDb),
+      syncArrayDiffs('savings_accounts', current.checkingAccounts, target.checkingAccounts, checkingToDb),
+      syncArrayDiffs('income_sources', current.incomeSources, target.incomeSources, incomeToDb),
+      syncArrayDiffs('fixed_expenses', current.fixedExpenses, target.fixedExpenses, expenseToDb),
+      syncArrayDiffs('subscriptions', current.subscriptions, target.subscriptions, subToDb),
+      syncArrayDiffs('spending', current.spending, target.spending, spendingToDb),
+      syncArrayDiffs('monthly_snapshots', current.snapshots, target.snapshots, snapshotToDb),
+      syncSettingsDiff(current.settings, target.settings),
+    ]);
+  } catch (e) {
+    console.error('Undo/redo sync error:', e);
+  }
+}
+
 export const useFinanceStore = create<FinanceState>((set, get) => ({
   userId: null,
   settings: null,
@@ -154,8 +248,64 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   spending: [],
   snapshots: [],
   loading: false,
+  _undoStack: [],
+  _redoStack: [],
+  _isUndoRedo: false,
 
   setUserId: (id) => set({ userId: id }),
+
+  _pushUndo: () => {
+    if (get()._isUndoRedo) return;
+    const snapshot = captureSnapshot(get());
+    set(s => ({
+      _undoStack: [...s._undoStack.slice(-29), snapshot],
+      _redoStack: [],
+    }));
+  },
+
+  undo: async () => {
+    const { _undoStack } = get();
+    if (_undoStack.length === 0) return;
+    const prev = _undoStack[_undoStack.length - 1];
+    const current = captureSnapshot(get());
+    set(s => ({
+      _isUndoRedo: true,
+      _undoStack: s._undoStack.slice(0, -1),
+      _redoStack: [...s._redoStack, current],
+      debtAccounts: prev.debtAccounts,
+      checkingAccounts: prev.checkingAccounts,
+      incomeSources: prev.incomeSources,
+      fixedExpenses: prev.fixedExpenses,
+      subscriptions: prev.subscriptions,
+      spending: prev.spending,
+      snapshots: prev.snapshots,
+      settings: prev.settings,
+    }));
+    await syncAllDiffs(current, prev);
+    set({ _isUndoRedo: false });
+  },
+
+  redo: async () => {
+    const { _redoStack } = get();
+    if (_redoStack.length === 0) return;
+    const next = _redoStack[_redoStack.length - 1];
+    const current = captureSnapshot(get());
+    set(s => ({
+      _isUndoRedo: true,
+      _redoStack: s._redoStack.slice(0, -1),
+      _undoStack: [...s._undoStack, current],
+      debtAccounts: next.debtAccounts,
+      checkingAccounts: next.checkingAccounts,
+      incomeSources: next.incomeSources,
+      fixedExpenses: next.fixedExpenses,
+      subscriptions: next.subscriptions,
+      spending: next.spending,
+      snapshots: next.snapshots,
+      settings: next.settings,
+    }));
+    await syncAllDiffs(current, next);
+    set({ _isUndoRedo: false });
+  },
 
   fetchAll: async (userId) => {
     set({ loading: true });
@@ -194,6 +344,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Settings
   updateExchangeRate: async (rate) => {
+    get()._pushUndo();
     const { userId, settings } = get();
     if (!userId || !settings) return;
     const now = new Date().toISOString();
@@ -221,12 +372,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     }
   },
   updateSavingsTarget: async (amount) => {
+    get()._pushUndo();
     const { userId, settings } = get();
     if (!userId || !settings) return;
     await supabase.from('settings').update({ savings_target: amount }).eq('user_id', userId);
     set({ settings: { ...settings, savingsTarget: amount } });
   },
   updateSavingsAccounts: async (sourceId, destId, day) => {
+    get()._pushUndo();
     const { userId, settings } = get();
     if (!userId || !settings) return;
     const updates: Record<string, unknown> = { savings_source_account_id: sourceId, savings_dest_account_id: destId };
@@ -235,6 +388,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set({ settings: { ...settings, savingsSourceAccountId: sourceId, savingsDestAccountId: destId, savingsTransferDay: day ?? settings.savingsTransferDay } });
   },
   executeSavingsTransfer: async () => {
+    get()._pushUndo();
     const { settings, checkingAccounts } = get();
     if (!settings || !settings.savingsSourceAccountId || !settings.savingsDestAccountId || settings.savingsTarget <= 0) return;
     const source = checkingAccounts.find(a => a.id === settings.savingsSourceAccountId);
@@ -261,6 +415,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Debt accounts
   addDebtAccount: async (account) => {
+    get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('debt_accounts').insert({
@@ -271,6 +426,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (data) set(s => ({ debtAccounts: [...s.debtAccounts, mapDebt(data)] }));
   },
   updateDebtAccount: async (id, updates) => {
+    get()._pushUndo();
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
@@ -283,12 +439,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === id ? { ...a, ...updates } : a) }));
   },
   deleteDebtAccount: async (id) => {
+    get()._pushUndo();
     await supabase.from('debt_accounts').delete().eq('id', id);
     set(s => ({ debtAccounts: s.debtAccounts.filter(a => a.id !== id) }));
   },
 
   // Checking accounts
   addCheckingAccount: async (account) => {
+    get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('savings_accounts').insert({
@@ -298,6 +456,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (data) set(s => ({ checkingAccounts: [...s.checkingAccounts, mapSavings(data)] }));
   },
   updateCheckingAccount: async (id, updates) => {
+    get()._pushUndo();
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
@@ -307,12 +466,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === id ? { ...a, ...updates } : a) }));
   },
   deleteCheckingAccount: async (id) => {
+    get()._pushUndo();
     await supabase.from('savings_accounts').delete().eq('id', id);
     set(s => ({ checkingAccounts: s.checkingAccounts.filter(a => a.id !== id) }));
   },
 
   // Income sources
   addIncomeSource: async (source) => {
+    get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('income_sources').insert({
@@ -323,6 +484,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (data) set(s => ({ incomeSources: [...s.incomeSources, mapIncome(data)] }));
   },
   updateIncomeSource: async (id, updates) => {
+    get()._pushUndo();
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
@@ -334,12 +496,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set(s => ({ incomeSources: s.incomeSources.map(i => i.id === id ? { ...i, ...updates } : i) }));
   },
   deleteIncomeSource: async (id) => {
+    get()._pushUndo();
     await supabase.from('income_sources').delete().eq('id', id);
     set(s => ({ incomeSources: s.incomeSources.filter(i => i.id !== id) }));
   },
 
   // Fixed expenses
   addFixedExpense: async (expense) => {
+    get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('fixed_expenses').insert({
@@ -349,6 +513,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (data) set(s => ({ fixedExpenses: [...s.fixedExpenses, mapExpense(data)] }));
   },
   updateFixedExpense: async (id, updates) => {
+    get()._pushUndo();
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
@@ -361,12 +526,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set(s => ({ fixedExpenses: s.fixedExpenses.map(e => e.id === id ? { ...e, ...updates } : e) }));
   },
   deleteFixedExpense: async (id) => {
+    get()._pushUndo();
     await supabase.from('fixed_expenses').delete().eq('id', id);
     set(s => ({ fixedExpenses: s.fixedExpenses.filter(e => e.id !== id) }));
   },
 
   // Subscriptions
   addSubscription: async (sub) => {
+    get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('subscriptions').insert({
@@ -375,6 +542,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (data) set(s => ({ subscriptions: [...s.subscriptions, mapSubscription(data)] }));
   },
   updateSubscription: async (id, updates) => {
+    get()._pushUndo();
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
@@ -390,12 +558,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set(s => ({ subscriptions: s.subscriptions.map(sub => sub.id === id ? { ...sub, ...updates } : sub) }));
   },
   deleteSubscription: async (id) => {
+    get()._pushUndo();
     await supabase.from('subscriptions').delete().eq('id', id);
     set(s => ({ subscriptions: s.subscriptions.filter(sub => sub.id !== id) }));
   },
 
   // Spending
   addSpending: async (entry) => {
+    get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
     const { data, error } = await supabase.from('spending').insert({
@@ -431,6 +601,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     }
   },
   updateSpending: async (id, updates) => {
+    get()._pushUndo();
     const oldEntry = get().spending.find(e => e.id === id);
     const dbUpdates: Record<string, unknown> = {};
     if (updates.date !== undefined) dbUpdates.date = updates.date;
@@ -490,6 +661,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     }
   },
   deleteSpending: async (id) => {
+    get()._pushUndo();
     // Find entry before deleting to reverse balance changes
     const entry = get().spending.find(e => e.id === id);
     await supabase.from('spending').delete().eq('id', id);
@@ -519,6 +691,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Snapshots
   saveSnapshot: async (snapshot) => {
+    get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
     const row = {
