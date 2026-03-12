@@ -138,7 +138,7 @@ export default function Monthly() {
     return sum + (acc.currency === 'USD' ? bal * exchangeRate : bal);
   }, 0);
   const totalSpending = monthlySpending.reduce((sum, e) => sum + e.amount, 0);
-  const totalExpenses = fixed + subsCost + totalSpending;
+  const totalExpenses = fixed + subsCost + debtMin + totalSpending;
   const savingsVal = Number(savingsAmount) || 0;
   const balance = totalIncome - totalExpenses - savingsVal;
   const debtPaid = accounts.reduce((sum, acc) => {
