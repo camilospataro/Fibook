@@ -15,18 +15,18 @@ export default function SavingsProjectionChart() {
   if (savingsTarget <= 0) {
     return (
       <Card className="bg-card border-border">
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Savings Projection — 2026</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Savings Projection</CardTitle></CardHeader>
         <CardContent><p className="text-muted-foreground text-sm">Set a monthly savings target in the Monthly page to see projections.</p></CardContent>
       </Card>
     );
   }
 
-  // Project from current month through Dec 2026
+  // Project from current month through Dec of the current year
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonthIdx = now.getMonth(); // 0-based
-  const endMonth = currentYear === 2026 ? 11 : 11; // always show through Dec 2026
-  const endYear = 2026;
+  const endMonth = 11; // December
+  const endYear = currentYear;
 
   const data: { label: string; savings: number }[] = [];
   let accumulated = startingSavings;
@@ -53,9 +53,9 @@ export default function SavingsProjectionChart() {
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Savings Projection — 2026</CardTitle>
+          <CardTitle className="text-sm">Savings Projection — {currentYear}</CardTitle>
           <span className="text-xs text-primary font-medium">
-            {formatCOP(totalByEnd)} by Dec 2026
+            {formatCOP(totalByEnd)} by Dec {currentYear}
           </span>
         </div>
       </CardHeader>

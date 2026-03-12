@@ -36,14 +36,17 @@ export default function TrendsCard() {
     [...snapshots].sort((a, b) => a.month.localeCompare(b.month)).slice(-12),
   [snapshots]);
 
-  // Average monthly discretionary spending (last 90 days)
+  // Average monthly discretionary spending (last 90 days, excluding auto-charges)
   const avgSpending = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 90);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
-    const recent = spending.filter(e => e.date >= cutoffStr);
+    const recent = spending.filter(e => e.date >= cutoffStr && !(e.tags ?? []).includes('auto-charge'));
+    if (recent.length === 0) return 0;
     const total = recent.reduce((s, e) => s + e.amount, 0);
-    return recent.length > 0 ? (total / 3) : 0;
+    // Count distinct months with data for accurate averaging
+    const months = new Set(recent.map(e => e.date.slice(0, 7)));
+    return total / Math.max(1, months.size);
   }, [spending]);
 
   const chartData = useMemo(() => {
@@ -101,6 +104,7 @@ export default function TrendsCard() {
 
       // Simulate debt payments for this month
       let monthDebtPayments = 0;
+      const totalRecurringOnDebt = accountState.reduce((s, a) => s + a.monthlyNewCharges, 0);
       for (const acc of accountState) {
         if (acc.balance <= 0) continue;
         const pay = Math.min(acc.payment, acc.balance);
@@ -108,7 +112,10 @@ export default function TrendsCard() {
         monthDebtPayments += pay;
       }
 
-      const projExpenses = fixedExp + subsCost + monthDebtPayments + avgSpending;
+      // Debt payments include paying off recurring charges (already in fixedExp+subsCost)
+      // plus paying down old principal. Only add the principal paydown to avoid double-counting.
+      const principalPaydown = Math.max(0, monthDebtPayments - totalRecurringOnDebt);
+      const projExpenses = fixedExp + subsCost + principalPaydown + avgSpending;
       const projBalance = income - projExpenses;
       const projSavings = Math.max(0, projBalance - savingsTarget) + savingsTarget;
 

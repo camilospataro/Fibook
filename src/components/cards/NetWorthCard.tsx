@@ -18,7 +18,10 @@ export default function NetWorthCard() {
   const chartData = useMemo(() => {
     const sorted = [...snapshots].sort((a, b) => a.month.localeCompare(b.month)).slice(-12);
     return sorted.map(s => {
-      const assets = s.cashOnHand || 0;
+      // Use checking balances if available, fall back to cashOnHand for older snapshots
+      const assets = (s.checkingBalances?.length)
+        ? s.checkingBalances.reduce((sum, c) => sum + c.balance, 0)
+        : (s.cashOnHand || 0);
       const debt = (s.debtBalances ?? []).reduce((sum, d) => sum + d.balance, 0);
       return {
         month: s.month.split('-')[1] + '/' + s.month.split('-')[0].slice(2),

@@ -2,7 +2,7 @@ import { Receipt, CreditCard, Repeat } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP } from '@/lib/formatters';
-import { totalFixedExpenses, totalMinimumPaymentsCOP, totalSubscriptionsCOP } from '@/lib/calculations';
+import { totalFixedExpenses, totalDebtPaymentsCOP, totalSubscriptionsCOP, newChargesPerDebtAccount } from '@/lib/calculations';
 
 export default function ExpensesBreakdown() {
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
@@ -13,9 +13,12 @@ export default function ExpensesBreakdown() {
   const activeSubs = subs.filter(s => s.active);
 
   const fixedTotal = totalFixedExpenses(fixedExpenses, exchangeRate);
-  const debtTotal = totalMinimumPaymentsCOP(accounts, exchangeRate);
   const subsTotal = totalSubscriptionsCOP(subs, exchangeRate, new Date().getMonth() + 1);
-  const grandTotal = fixedTotal + debtTotal + subsTotal;
+  // Only show principal paydown (debt payments minus recurring charges already counted above)
+  const debtPayments = totalDebtPaymentsCOP(accounts, exchangeRate);
+  const recurringOnDebt = [...newChargesPerDebtAccount(accounts, subs, fixedExpenses, exchangeRate).values()].reduce((s, v) => s + v, 0);
+  const debtPrincipal = Math.max(0, debtPayments - recurringOnDebt);
+  const grandTotal = fixedTotal + debtPrincipal + subsTotal;
 
   const sections = [
     {
@@ -29,14 +32,18 @@ export default function ExpensesBreakdown() {
       })),
     },
     {
-      label: 'Debt Minimum Payments',
+      label: 'Debt Paydown',
       icon: CreditCard,
-      total: debtTotal,
-      items: accounts.map(a => ({
-        name: a.name,
-        amount: a.currency === 'USD' ? a.minimumMonthlyPayment * exchangeRate : a.minimumMonthlyPayment,
-        detail: a.currency,
-      })),
+      total: debtPrincipal,
+      items: accounts.map(a => {
+        const payment = a.currency === 'USD' ? (a.monthlyPayment || 0) * exchangeRate : (a.monthlyPayment || 0);
+        const charges = newChargesPerDebtAccount(accounts, subs, fixedExpenses, exchangeRate).get(a.id) ?? 0;
+        return {
+          name: a.name,
+          amount: Math.max(0, payment - charges),
+          detail: a.currency,
+        };
+      }),
     },
     {
       label: 'Subscriptions',

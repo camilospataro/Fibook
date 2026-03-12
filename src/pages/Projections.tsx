@@ -143,8 +143,10 @@ export default function Projections() {
     cutoff.setDate(cutoff.getDate() - 90);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
     const recent = spending.filter(e => e.date >= cutoffStr && !(e.tags ?? []).includes('auto-charge'));
+    if (recent.length === 0) return 0;
     const total = recent.reduce((s, e) => s + e.amount, 0);
-    return recent.length > 0 ? (total / 3) : 0; // average per month over 3 months
+    const months = new Set(recent.map(e => e.date.slice(0, 7)));
+    return total / Math.max(1, months.size);
   }, [spending]);
 
   // ─── Recurring charges map (subs/expenses linked to debt accounts) ──

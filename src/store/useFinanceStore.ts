@@ -397,6 +397,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     }
   },
   updateSpending: async (id, updates) => {
+    const oldEntry = get().spending.find(e => e.id === id);
     const dbUpdates: Record<string, unknown> = {};
     if (updates.date !== undefined) dbUpdates.date = updates.date;
     if (updates.description !== undefined) dbUpdates.description = updates.description;
@@ -408,6 +409,51 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
     await supabase.from('spending').update(dbUpdates).eq('id', id);
     set(s => ({ spending: s.spending.map(e => e.id === id ? { ...e, ...updates } : e) }));
+
+    // Reverse old balance effects and apply new ones when amount or payment method changes
+    if (oldEntry && (updates.amount !== undefined || updates.linkedAccountId !== undefined || updates.paymentMethod !== undefined)) {
+      const newAmount = updates.amount ?? oldEntry.amount;
+      const newLinkedAccount = updates.linkedAccountId !== undefined ? updates.linkedAccountId : oldEntry.linkedAccountId;
+      const newPaymentMethod = updates.paymentMethod ?? oldEntry.paymentMethod;
+
+      // Reverse old checking deduction, apply new one
+      if (oldEntry.linkedAccountId) {
+        const oldAcct = get().checkingAccounts.find(a => a.id === oldEntry.linkedAccountId);
+        if (oldAcct) {
+          const restored = oldAcct.currentBalance + oldEntry.amount;
+          await supabase.from('savings_accounts').update({ current_balance: restored }).eq('id', oldEntry.linkedAccountId);
+          set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === oldEntry.linkedAccountId ? { ...a, currentBalance: restored } : a) }));
+        }
+      }
+      if (newLinkedAccount) {
+        const newAcct = get().checkingAccounts.find(a => a.id === newLinkedAccount);
+        if (newAcct) {
+          const deducted = newAcct.currentBalance - newAmount;
+          await supabase.from('savings_accounts').update({ current_balance: deducted }).eq('id', newLinkedAccount);
+          set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === newLinkedAccount ? { ...a, currentBalance: deducted } : a) }));
+        }
+      }
+
+      // Reverse old debt charge, apply new one
+      if (oldEntry.paymentMethod.startsWith('debt_')) {
+        const oldDebtId = oldEntry.paymentMethod.replace('debt_', '');
+        const oldDebt = get().debtAccounts.find(a => a.id === oldDebtId);
+        if (oldDebt) {
+          const reversed = oldDebt.currentBalance - oldEntry.amount;
+          await supabase.from('debt_accounts').update({ current_balance: reversed }).eq('id', oldDebtId);
+          set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === oldDebtId ? { ...a, currentBalance: reversed } : a) }));
+        }
+      }
+      if (newPaymentMethod.startsWith('debt_')) {
+        const newDebtId = newPaymentMethod.replace('debt_', '');
+        const newDebt = get().debtAccounts.find(a => a.id === newDebtId);
+        if (newDebt) {
+          const charged = newDebt.currentBalance + newAmount;
+          await supabase.from('debt_accounts').update({ current_balance: charged }).eq('id', newDebtId);
+          set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === newDebtId ? { ...a, currentBalance: charged } : a) }));
+        }
+      }
+    }
   },
   deleteSpending: async (id) => {
     // Find entry before deleting to reverse balance changes

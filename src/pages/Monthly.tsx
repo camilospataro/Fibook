@@ -87,7 +87,7 @@ export default function Monthly() {
     [spending, currentMonth]
   );
   const ccCharges = useMemo(() =>
-    monthlySpending.filter(e => e.paymentMethod.startsWith('credit_')).reduce((sum, e) => sum + e.amount, 0),
+    monthlySpending.filter(e => e.paymentMethod.startsWith('credit_') || e.paymentMethod.startsWith('debt_')).reduce((sum, e) => sum + e.amount, 0),
     [monthlySpending]
   );
   const ccPayments = useMemo(() =>
@@ -240,8 +240,12 @@ export default function Monthly() {
 
     const absOffset = Math.abs(monthOffset);
     const direction = monthOffset > 0 ? 1 : -1; // +1 future, -1 past without snapshot
+    const [baseY, baseM] = nowMonth.split('-').map(Number);
 
     for (let m = 0; m < absOffset; m++) {
+      // Calendar month for this simulation step (1-12)
+      const stepDate = new Date(baseY, baseM - 1 + (m + 1) * direction);
+      const stepCalMonth = stepDate.getMonth() + 1;
       // Income deposits to linked checking accounts
       for (const src of incomeSources) {
         if (!src.linkedAccountId || !checkingIds.has(src.linkedAccountId)) continue;
@@ -287,9 +291,10 @@ export default function Monthly() {
       // Subscriptions (active) from linked checking accounts
       for (const sub of subs) {
         if (!sub.active || !sub.linkedAccountId || !checkingIds.has(sub.linkedAccountId)) continue;
+        // Annual subs only charge in their renewal month
+        if (sub.billingCycle === 'annual' && sub.renewalMonth !== stepCalMonth) continue;
         const acc = state.find(a => a.id === sub.linkedAccountId)!;
-        let cost = sub.amount;
-        if (sub.billingCycle === 'annual') cost /= 12;
+        const cost = sub.amount; // full amount (monthly or annual lump)
         const amt = sub.currency === acc.currency ? cost
           : sub.currency === 'USD' ? cost * exchangeRate
           : cost / exchangeRate;
@@ -298,7 +303,7 @@ export default function Monthly() {
     }
 
     return Object.fromEntries(state.map(a => [a.id, a.balance]));
-  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, monthOffset, recurringCharges]);
+  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, monthOffset, recurringCharges, nowMonth]);
 
   // ─── Calculations (using effective balances) ──────────
   const totalIncome = incomeSources.reduce((sum, src) => {
@@ -312,12 +317,17 @@ export default function Monthly() {
     const bal = effectiveDebtBalances[acc.id] ?? acc.currentBalance;
     return sum + (acc.currency === 'USD' ? bal * exchangeRate : bal);
   }, 0);
-  const totalSpending = monthlySpending.reduce((sum, e) => sum + e.amount, 0);
+  const totalSpending = monthlySpending
+    .filter(e => !(e.tags ?? []).includes('auto-charge'))
+    .reduce((sum, e) => sum + e.amount, 0);
   const debtPaid = accounts.reduce((sum, acc) => {
     const paid = monthMode !== 'current' ? (effectiveDebtPayments[acc.id] ?? 0) : (Number(ccPayments[acc.id]) || 0);
     return sum + (acc.currency === 'USD' ? paid * exchangeRate : paid);
   }, 0);
-  const totalExpenses = fixed + subsCost + debtPaid + totalSpending;
+  // Recurring charges on debt are already counted in fixed + subsCost, so only add the principal portion
+  const totalRecurringOnDebt = [...recurringCharges.values()].reduce((s, v) => s + v, 0);
+  const principalPaydown = Math.max(0, debtPaid - totalRecurringOnDebt);
+  const totalExpenses = fixed + subsCost + principalPaydown + totalSpending;
   const savingsVal = Number(savingsAmount) || 0;
   const balance = totalIncome - totalExpenses - savingsVal;
   const totalChecking = checkingAccounts.reduce((sum, acc) => {
@@ -381,11 +391,11 @@ export default function Monthly() {
         incomeEntries: incomeSources.map(s => ({ sourceId: s.id, amount: Number(incomeAmounts[s.id]) || 0 })),
         sideIncome: Number(sideIncome) || 0,
         totalIncome, totalExpenses, totalDebtPaid: debtPaid, newCharges: ccCharges,
-        balance, cashOnHand: Math.max(0, balance), savings: Number(savingsAmount) || 0,
+        balance, cashOnHand: totalChecking, savings: Number(savingsAmount) || 0,
       });
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalIncome, totalExpenses, debtPaid, ccCharges, balance, savingsAmount, sideIncome, debtBalances, incomeAmounts, currentMonth, isReadOnly]);
+  }, [totalIncome, totalExpenses, debtPaid, ccCharges, balance, savingsAmount, sideIncome, debtBalances, incomeAmounts, currentMonth, isReadOnly, totalChecking]);
 
   // Trigger auto-save when calculated values change
   const mounted = useRef(false);
@@ -862,7 +872,7 @@ export default function Monthly() {
               <SummaryRow label="Fixed Expenses" value={formatCOP(fixed)} />
               <SummaryRow label="Subscriptions" value={formatCOP(subsCost)} />
               <SummaryRow label="Variable Spending" value={formatCOP(totalSpending)} />
-              <SummaryRow label="Debt Payments" value={formatCOP(debtPaid)} />
+              <SummaryRow label="Debt Paydown" value={formatCOP(principalPaydown)} />
               <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
               <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
               <Separator />

@@ -70,11 +70,15 @@ export function totalMonthlyExpenses(
   exchangeRate: number,
   month?: number
 ): number {
-  return (
-    totalFixedExpenses(fixedExpenses, exchangeRate) +
-    totalDebtPaymentsCOP(accounts, exchangeRate) +
-    totalSubscriptionsCOP(subs, exchangeRate, month)
-  );
+  const fixed = totalFixedExpenses(fixedExpenses, exchangeRate);
+  const subsCost = totalSubscriptionsCOP(subs, exchangeRate, month);
+  const debtPayments = totalDebtPaymentsCOP(accounts, exchangeRate);
+  // Recurring charges on debt cards are already in fixed + subsCost.
+  // Only add the principal paydown portion of debt payments to avoid double-counting.
+  const recurringOnDebt = [...newChargesPerDebtAccount(accounts, subs, fixedExpenses, exchangeRate, month).values()]
+    .reduce((s, v) => s + v, 0);
+  const principalPaydown = Math.max(0, debtPayments - recurringOnDebt);
+  return fixed + subsCost + principalPaydown;
 }
 
 /**

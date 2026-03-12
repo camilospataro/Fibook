@@ -2,12 +2,17 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP } from '@/lib/formatters';
+import { newChargesPerDebtAccount } from '@/lib/calculations';
 
 export default function DebtPayoffChart() {
   const accounts = useFinanceStore(s => s.debtAccounts);
+  const subs = useFinanceStore(s => s.subscriptions);
+  const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
 
-  // Build per-account balances in COP with their monthly payments
+  const recurringCharges = newChargesPerDebtAccount(accounts, subs, fixedExpenses, exchangeRate);
+
+  // Build per-account balances in COP with their monthly payments and new charges
   const accountData = accounts
     .filter(a => a.currentBalance > 0)
     .map(a => ({
@@ -15,6 +20,7 @@ export default function DebtPayoffChart() {
       payment: a.currency === 'USD'
         ? (a.monthlyPayment || a.minimumMonthlyPayment) * exchangeRate
         : (a.monthlyPayment || a.minimumMonthlyPayment),
+      newCharges: recurringCharges.get(a.id) ?? 0,
     }));
 
   const totalDebt = accountData.reduce((s, a) => s + a.balance, 0);
@@ -40,7 +46,7 @@ export default function DebtPayoffChart() {
     const label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     data.push({ label, debt: Math.round(total) });
     if (total <= 0) break;
-    balances = balances.map((b, idx) => Math.max(0, b - accountData[idx].payment));
+    balances = balances.map((b, idx) => Math.max(0, b + accountData[idx].newCharges - accountData[idx].payment));
   }
 
   const payoffMonths = data.length - 1;
