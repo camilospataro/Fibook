@@ -43,14 +43,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background flex">
       <Sidebar />
       <main className="flex-1 pb-16 md:pb-0 overflow-y-auto">
-        <UndoRedoButtons />
-        <button
-          onClick={() => navigate('/help')}
-          className="fixed top-3 left-3 md:left-auto md:right-14 z-50 p-2 bg-card/90 backdrop-blur border border-border rounded-full shadow-lg hover:bg-secondary transition-colors"
-          title="Help"
-        >
-          <HelpCircle className="w-4 h-4 text-muted-foreground" />
-        </button>
+        <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5">
+          <button
+            onClick={() => navigate('/help')}
+            className="p-2 bg-card/90 backdrop-blur border border-border rounded-full shadow-lg hover:bg-secondary transition-colors"
+            title="Help"
+          >
+            <HelpCircle className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <UndoRedoButtons />
+        </div>
         {children}
       </main>
       <BottomNav />

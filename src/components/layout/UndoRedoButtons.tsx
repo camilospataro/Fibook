@@ -38,7 +38,7 @@ export default function UndoRedoButtons() {
   if (!canUndo && !canRedo) return null;
 
   return (
-    <div className="fixed top-3 right-3 z-50 flex gap-1 bg-card/90 backdrop-blur border border-border rounded-lg p-1 shadow-lg">
+    <div className="flex gap-1 bg-card/90 backdrop-blur border border-border rounded-lg p-1 shadow-lg">
       <button
         onClick={handleUndo}
         disabled={!canUndo}

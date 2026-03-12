@@ -33,8 +33,8 @@ export default function SpendingDonut({ entries }: { entries: SpendingEntry[] })
         <CardTitle className="text-sm">By Category</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-4">
-          <div className="w-28 h-28">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={data} dataKey="value" innerRadius={30} outerRadius={50} paddingAngle={2} strokeWidth={0}>
