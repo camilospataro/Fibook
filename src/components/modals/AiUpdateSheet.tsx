@@ -188,8 +188,8 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
     }));
 
     try {
-      // Use fetch directly to avoid supabase client swallowing error details
-      const { data: { session } } = await supabase.auth.getSession();
+      // Refresh the session to ensure a valid JWT, then fetch directly
+      const { data: { session } } = await supabase.auth.refreshSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-update`, {
         method: 'POST',
         headers: {
