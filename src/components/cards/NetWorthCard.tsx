@@ -50,7 +50,9 @@ export default function NetWorthCard() {
                 <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 9 }} />
                 <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 9 }} tickFormatter={v => `${(v / 1000000).toFixed(1)}M`} />
                 <Tooltip
-                  contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }}
+                  contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--foreground)' }}
+                  labelStyle={{ color: 'var(--muted-foreground)' }}
+                  itemStyle={{ color: 'var(--foreground)' }}
                   formatter={((value: number) => [formatCOP(value), 'Net Worth']) as never}
                 />
                 <defs>

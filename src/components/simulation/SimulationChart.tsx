@@ -209,7 +209,10 @@ export default function SimulationChart({
                   borderRadius: 8,
                   fontSize: 11,
                   maxWidth: 260,
+                  color: 'hsl(var(--foreground))',
                 }}
+                labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
                 labelFormatter={v => `Day ${v}`}
                 formatter={((value: number, name: string) => {
                   if (name.includes('_') && name.length > 30) return null;

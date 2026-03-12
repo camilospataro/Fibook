@@ -42,6 +42,7 @@ export default function SpendingDonut({ entries }: { entries: SpendingEntry[] })
                 </Pie>
                 <Tooltip
                   contentStyle={{ backgroundColor: '#111827', border: '1px solid #1E293B', borderRadius: '8px' }}
+                  labelStyle={{ color: '#94A3B8' }}
                   itemStyle={{ color: '#E8ECF4' }}
                   formatter={(value: number | undefined) => formatCOP(value ?? 0)}
                 />

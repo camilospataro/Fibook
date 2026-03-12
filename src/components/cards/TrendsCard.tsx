@@ -185,7 +185,9 @@ export default function TrendsCard() {
               <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} />
               <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} tickFormatter={v => `${(v / 1000000).toFixed(1)}M`} />
               <Tooltip
-                contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--foreground)' }}
+                labelStyle={{ color: 'var(--muted-foreground)' }}
+                itemStyle={{ color: 'var(--foreground)' }}
                 formatter={((value: number, _name: string, props: { payload: { projected: boolean } }) => {
                   const suffix = props.payload.projected ? ' (projected)' : '';
                   return [formatCOP(value) + suffix];
