@@ -188,27 +188,31 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
     }));
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('ai-update', {
-        body: { message: message.trim(), currentData, files: fileAttachments },
+      // Use fetch directly to avoid supabase client swallowing error details
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ message: message.trim(), currentData, files: fileAttachments }),
       });
 
-      if (fnError) {
-        // Try to extract body from FunctionsHttpError
-        let msg = fnError.message || 'Failed to process request';
-        try {
-          const context = (fnError as unknown as { context?: { json?: () => Promise<unknown> } }).context;
-          if (context?.json) {
-            const body = await context.json() as Record<string, string>;
-            if (body?.error) msg = body.error;
-          }
-        } catch { /* ignore */ }
-        setError(msg);
-      } else if (data?.error) {
-        setError(data.error);
-      } else if (data?.actions?.length > 0) {
-        setResponse(data as AiResponse);
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('AI Update error:', res.status, text);
+        setError(`AI service error (${res.status}): ${text.slice(0, 200)}`);
       } else {
-        setError("Couldn't understand what to update. Try being more specific.");
+        const data = await res.json();
+        if (data?.error) {
+          setError(data.error);
+        } else if (data?.actions?.length > 0) {
+          setResponse(data as AiResponse);
+        } else {
+          setError("Couldn't understand what to update. Try being more specific.");
+        }
       }
     } catch (err) {
       setError(`Could not connect to AI service: ${(err as Error).message}`);
