@@ -6,6 +6,7 @@ export interface Settings {
   savingsTarget: number;
   savingsSourceAccountId: string | null;
   savingsDestAccountId: string | null;
+  savingsTransferDay: number;
 }
 
 export interface DebtAccount {

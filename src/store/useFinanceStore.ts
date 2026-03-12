@@ -22,7 +22,7 @@ interface FinanceState {
   updateExchangeRate: (rate: number) => Promise<void>;
   refreshExchangeRate: () => Promise<void>;
   updateSavingsTarget: (amount: number) => Promise<void>;
-  updateSavingsAccounts: (sourceId: string | null, destId: string | null) => Promise<void>;
+  updateSavingsAccounts: (sourceId: string | null, destId: string | null, day?: number) => Promise<void>;
   executeSavingsTransfer: () => Promise<void>;
 
   // Debt accounts
@@ -63,7 +63,7 @@ interface FinanceState {
 }
 
 function mapSettings(row: Record<string, unknown>): Settings {
-  return { id: row.id as string, userId: row.user_id as string, exchangeRate: row.exchange_rate as number, exchangeRateUpdatedAt: (row.exchange_rate_updated_at as string) ?? null, savingsTarget: (row.savings_target as number) ?? 0, savingsSourceAccountId: (row.savings_source_account_id as string) ?? null, savingsDestAccountId: (row.savings_dest_account_id as string) ?? null };
+  return { id: row.id as string, userId: row.user_id as string, exchangeRate: row.exchange_rate as number, exchangeRateUpdatedAt: (row.exchange_rate_updated_at as string) ?? null, savingsTarget: (row.savings_target as number) ?? 0, savingsSourceAccountId: (row.savings_source_account_id as string) ?? null, savingsDestAccountId: (row.savings_dest_account_id as string) ?? null, savingsTransferDay: (row.savings_transfer_day as number) ?? 1 };
 }
 
 function mapDebt(row: Record<string, unknown>): DebtAccount {
@@ -226,11 +226,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await supabase.from('settings').update({ savings_target: amount }).eq('user_id', userId);
     set({ settings: { ...settings, savingsTarget: amount } });
   },
-  updateSavingsAccounts: async (sourceId, destId) => {
+  updateSavingsAccounts: async (sourceId, destId, day) => {
     const { userId, settings } = get();
     if (!userId || !settings) return;
-    await supabase.from('settings').update({ savings_source_account_id: sourceId, savings_dest_account_id: destId }).eq('user_id', userId);
-    set({ settings: { ...settings, savingsSourceAccountId: sourceId, savingsDestAccountId: destId } });
+    const updates: Record<string, unknown> = { savings_source_account_id: sourceId, savings_dest_account_id: destId };
+    if (day !== undefined) updates.savings_transfer_day = day;
+    await supabase.from('settings').update(updates).eq('user_id', userId);
+    set({ settings: { ...settings, savingsSourceAccountId: sourceId, savingsDestAccountId: destId, savingsTransferDay: day ?? settings.savingsTransferDay } });
   },
   executeSavingsTransfer: async () => {
     const { settings, checkingAccounts } = get();

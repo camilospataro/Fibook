@@ -38,6 +38,7 @@ export default function Monthly() {
   const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
   const savingsSourceId = useFinanceStore(s => s.settings?.savingsSourceAccountId ?? null);
   const savingsDestId = useFinanceStore(s => s.settings?.savingsDestAccountId ?? null);
+  const savingsTransferDay = useFinanceStore(s => s.settings?.savingsTransferDay ?? 1);
   const saveSnapshot = useFinanceStore(s => s.saveSnapshot);
   const updateSavingsTarget = useFinanceStore(s => s.updateSavingsTarget);
   const updateSavingsAccounts = useFinanceStore(s => s.updateSavingsAccounts);
@@ -530,7 +531,7 @@ export default function Monthly() {
                 <span className="text-xs text-muted-foreground block">Monthly savings transfer</span>
                 {savingsSourceId && savingsDestId && (
                   <span className="text-[10px] text-muted-foreground/70">
-                    {checkingAccounts.find(a => a.id === savingsSourceId)?.name ?? '?'} → {checkingAccounts.find(a => a.id === savingsDestId)?.name ?? '?'}
+                    {checkingAccounts.find(a => a.id === savingsSourceId)?.name ?? '?'} → {checkingAccounts.find(a => a.id === savingsDestId)?.name ?? '?'} · Day {savingsTransferDay}
                   </span>
                 )}
               </div>
@@ -558,6 +559,9 @@ export default function Monthly() {
                       {checkingAccounts.filter(a => a.id !== savingsSourceId).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                </div>
+                <div><label className="text-[10px] text-muted-foreground">Transfer day</label>
+                  <Input type="number" min={1} max={28} defaultValue={savingsTransferDay} onBlur={e => { const d = Math.max(1, Math.min(28, Number(e.target.value) || 1)); updateSavingsAccounts(savingsSourceId, savingsDestId, d); }} className="h-7 text-xs bg-secondary border-border w-full" />
                 </div>
                 {monthMode === 'current' && savingsSourceId && savingsDestId && (Number(savingsAmount) || 0) > 0 && (
                   <Button size="sm" variant="secondary" className="w-full text-xs" onClick={async () => { await executeSavingsTransfer(); toast.success('Savings transferred'); }}>
