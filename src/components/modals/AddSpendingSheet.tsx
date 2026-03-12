@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +44,6 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [showMore, setShowMore] = useState(false);
 
   function addTag() {
     const t = tagInput.trim().toLowerCase();
@@ -79,7 +78,6 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
     setTagInput('');
     setDate(getToday());
     setSaving(false);
-    setShowMore(false);
     onOpenChange(false);
   }
 
@@ -90,25 +88,26 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
           <SheetTitle>Add Spending</SheetTitle>
         </SheetHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-          {/* Core fields — always visible */}
+          <div className="space-y-2">
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-secondary border-border" />
+          </div>
           <div className="space-y-2">
             <Label>Description</Label>
-            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="What did you spend on?" className="bg-secondary border-border" required autoFocus />
+            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="What did you spend on?" className="bg-secondary border-border" required />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Amount (COP)</Label>
-              <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" min="0" className="bg-secondary border-border" required />
-            </div>
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={category} onValueChange={v => setCategory(v as SpendingCategory)}>
-                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2">
+            <Label>Amount (COP)</Label>
+            <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" min="0" className="bg-secondary border-border" required />
+          </div>
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={category} onValueChange={v => setCategory(v as SpendingCategory)}>
+              <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>Pay From</Label>
@@ -139,68 +138,39 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Expandable section — date, tags, budget link */}
-          <button
-            type="button"
-            onClick={() => setShowMore(!showMore)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-          >
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
-            {showMore ? 'Less options' : 'More options'}
-            {(tags.length > 0 || linkedBudgetId || date !== getToday()) && (
-              <span className="ml-auto text-[10px] text-primary">
-                {[tags.length > 0 && `${tags.length} tag${tags.length > 1 ? 's' : ''}`, linkedBudgetId && 'budget', date !== getToday() && 'date'].filter(Boolean).join(', ')}
-              </span>
-            )}
-          </button>
-
-          {showMore && (
-            <div className="space-y-4 pt-1">
-              <div className="space-y-2">
-                <Label>Date</Label>
-                <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-secondary border-border" />
-              </div>
-              <div className="space-y-2">
-                <Label>Tags</Label>
-                {tags.length > 0 && (
-                  <div className="flex gap-1.5 flex-wrap">
-                    {tags.map(tag => (
-                      <Badge key={tag} variant="secondary" className="text-xs gap-1">
-                        {tag}
-                        <button type="button" onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-destructive">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <Input
-                  value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
-                  placeholder="Type a tag and press Enter"
-                  className="bg-secondary border-border"
-                />
-              </div>
-              {budgetItems.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Link to Budget</Label>
-                  <Select value={linkedBudgetId ?? ''} onValueChange={v => setLinkedBudgetId(v || null)}>
-                    <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Select budget item" /></SelectTrigger>
-                    <SelectContent>
-                      {budgetItems.map(b => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name} ({formatCurrency(b.amount, b.currency)})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+          <div className="space-y-2">
+            <Label>Link to Budget</Label>
+            <Select value={linkedBudgetId ?? ''} onValueChange={v => setLinkedBudgetId(v || null)}>
+              <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Select budget item" /></SelectTrigger>
+              <SelectContent>
+                {budgetItems.map(b => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name} ({formatCurrency(b.amount, b.currency)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <div className="flex gap-1.5 flex-wrap">
+              {tags.map(tag => (
+                <Badge key={tag} variant="secondary" className="text-xs gap-1">
+                  {tag}
+                  <button type="button" onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-destructive">
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
             </div>
-          )}
-
+            <Input
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+              placeholder="Type a tag and press Enter"
+              className="bg-secondary border-border"
+            />
+          </div>
           <Button type="submit" className="w-full" disabled={saving}>
             {saving ? 'Saving...' : 'Add Spending'}
           </Button>
