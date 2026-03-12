@@ -1,194 +1,645 @@
 import { useState, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  ReferenceLine,
+} from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP } from '@/lib/formatters';
-import { debtPayoffTimeline, totalDebtCOP, totalMonthlyIncome, totalMonthlyExpenses, monthsToPayoff, totalMinimumPaymentsCOP } from '@/lib/calculations';
+import {
+  totalDebtCOP, totalCheckingCOP, totalSubscriptionsCOP,
+  totalMonthlyIncome, totalFixedExpenses,
+  totalMinimumPaymentsCOP, totalDebtPaymentsCOP,
+  monthsToPayoff,
+} from '@/lib/calculations';
+import type { DebtAccount } from '@/types';
+
+// ─── Helpers ────────────────────────────────────────────────
+
+function toCOP(amount: number, currency: 'COP' | 'USD', rate: number) {
+  return currency === 'USD' ? amount * rate : amount;
+}
+
+function monthLabel(offset: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + offset);
+  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+}
+
+function monthLabelFull(offset: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + offset);
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function fmtAxis(v: number) {
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
+  return String(v);
+}
+
+function perAccountTimeline(
+  acc: DebtAccount,
+  extra: number,
+  exchangeRate: number,
+  maxMonths = 360,
+) {
+  const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
+  const payment = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate) + extra;
+  const points: { month: number; balance: number }[] = [{ month: 0, balance: bal }];
+  let b = bal;
+  for (let m = 1; m <= maxMonths && b > 0; m++) {
+    b = Math.max(0, b - payment);
+    points.push({ month: m, balance: b });
+  }
+  return points;
+}
+
+/** Snowball: allocate surplus to smallest-balance-first */
+function snowballPayoff(
+  accounts: DebtAccount[],
+  surplus: number,
+  exchangeRate: number,
+  maxMonths = 360,
+) {
+  if (accounts.length === 0) return [];
+  // Each account starts with its balance and minimum payment
+  const state = accounts
+    .map(a => ({
+      id: a.id,
+      balance: toCOP(a.currentBalance, a.currency, exchangeRate),
+      minPayment: toCOP(a.minimumMonthlyPayment, a.currency, exchangeRate),
+    }))
+    .sort((a, b) => a.balance - b.balance);
+
+  const totalMinimums = state.reduce((s, a) => s + a.minPayment, 0);
+  let extraPool = Math.max(0, surplus);
+
+  const timeline: { month: number; total: number }[] = [
+    { month: 0, total: state.reduce((s, a) => s + a.balance, 0) },
+  ];
+
+  for (let m = 1; m <= maxMonths; m++) {
+    let remaining = extraPool;
+    for (const a of state) {
+      if (a.balance <= 0) continue;
+      let pay = a.minPayment;
+      // Snowball: pour extra into smallest remaining
+      if (remaining > 0) {
+        pay += remaining;
+        remaining = 0;
+      }
+      a.balance = Math.max(0, a.balance - pay);
+    }
+    const total = state.reduce((s, a) => s + a.balance, 0);
+    timeline.push({ month: m, total });
+    if (total <= 0) break;
+    // Freed-up minimums from paid-off accounts go to pool next month
+    extraPool = surplus + state.filter(a => a.balance <= 0).reduce((s, a) => s + a.minPayment, 0);
+  }
+  return timeline;
+}
+
+const TOOLTIP_STYLE = { backgroundColor: '#111827', border: '1px solid #1E293B', borderRadius: '8px' };
+const GRID_STROKE = '#1E293B';
+const TICK_STYLE = { fill: '#94A3B8', fontSize: 11 };
+
+// ─── Component ──────────────────────────────────────────────
 
 export default function Projections() {
-  const accounts = useFinanceStore(s => s.debtAccounts);
+  const debtAccounts = useFinanceStore(s => s.debtAccounts);
+  const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
   const incomeSources = useFinanceStore(s => s.incomeSources);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
-  const subs = useFinanceStore(s => s.subscriptions);
+  const subscriptions = useFinanceStore(s => s.subscriptions);
+  const spending = useFinanceStore(s => s.spending);
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
+  const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
 
-  const totalDebt = totalDebtCOP(accounts, exchangeRate);
+  const [extraPayments, setExtraPayments] = useState<Record<string, number>>({});
+
+  // ─── Base calculations ──────────────────────────────────
   const income = totalMonthlyIncome(incomeSources, exchangeRate);
-  const expenses = totalMonthlyExpenses(fixedExpenses, accounts, subs, exchangeRate);
-  const minPayments = totalMinimumPaymentsCOP(accounts, exchangeRate);
-  const balance = income - expenses;
+  const fixedExp = totalFixedExpenses(fixedExpenses, exchangeRate);
+  const subsCost = totalSubscriptionsCOP(subscriptions, exchangeRate);
+  const debtPayments = totalDebtPaymentsCOP(debtAccounts, exchangeRate);
+  const minPayments = totalMinimumPaymentsCOP(debtAccounts, exchangeRate);
+  const debt = totalDebtCOP(debtAccounts, exchangeRate);
+  const checking = totalCheckingCOP(checkingAccounts, exchangeRate);
 
-  // Per-account extra payment sliders
-  const [extraPayments, setExtraPayments] = useState<Record<string, number>>(() =>
-    Object.fromEntries(accounts.map(a => [a.id, 0]))
-  );
+  // Average monthly discretionary spending (last 90 days)
+  const avgSpending = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const recent = spending.filter(e => e.date >= cutoffStr);
+    const total = recent.reduce((s, e) => s + e.amount, 0);
+    return recent.length > 0 ? (total / 3) : 0; // average per month over 3 months
+  }, [spending]);
 
-  const totalExtra = Object.values(extraPayments).reduce((sum, v) => sum + v, 0);
-  const totalPayment = minPayments + totalExtra;
+  const totalExtra = Object.values(extraPayments).reduce((s, v) => s + v, 0);
+  const totalOutflows = fixedExp + subsCost + debtPayments + totalExtra + avgSpending + savingsTarget;
+  const surplus = income - totalOutflows;
 
-  // Debt payoff timeline
-  const timeline = useMemo(() => debtPayoffTimeline(totalDebt, totalPayment), [totalDebt, totalPayment]);
-  const payoffMonths = monthsToPayoff(totalDebt, totalPayment);
+  // ─── Milestones ─────────────────────────────────────────
+  const milestones = useMemo(() => {
+    // Debt-free: max payoff across all accounts (using actual payments + extra)
+    let debtFreeMonths = 0;
+    debtAccounts.forEach(acc => {
+      const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
+      const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate) + (extraPayments[acc.id] ?? 0);
+      const m = pay > 0 ? monthsToPayoff(bal, pay) : Infinity;
+      if (m > debtFreeMonths) debtFreeMonths = m;
+    });
 
-  // Savings projection
-  const monthlySavings = Math.max(0, balance - totalExtra);
-  const savingsData = useMemo(() => {
-    const data: { month: number; savings: number }[] = [];
-    for (let i = 0; i <= 24; i++) {
-      data.push({ month: i, savings: monthlySavings * i });
+    // Emergency fund months
+    const monthlyExp = fixedExp + subsCost + debtPayments + avgSpending;
+    const emergencyMonths = monthlyExp > 0 ? checking / monthlyExp : Infinity;
+
+    // Savings target months
+    const monthlySavings = Math.max(0, surplus);
+    const savingsMonths = savingsTarget > 0 && monthlySavings > 0
+      ? Math.ceil(savingsTarget / monthlySavings) : savingsTarget > 0 ? Infinity : 0;
+
+    const netWorth = checking - debt;
+
+    return { debtFreeMonths, emergencyMonths, savingsMonths, netWorth };
+  }, [debtAccounts, exchangeRate, extraPayments, fixedExp, subsCost, debtPayments, avgSpending, checking, debt, surplus, savingsTarget]);
+
+  // ─── Cash flow waterfall ────────────────────────────────
+  const waterfallData = useMemo(() => {
+    const items = [
+      { name: 'Income', amount: income, running: income },
+    ];
+    let running = income;
+
+    const outflows: [string, number, string][] = [
+      ['Fixed Exp.', fixedExp, '#FF6B6B'],
+      ['Subscriptions', subsCost, '#FF6B6B'],
+      ['Debt Payments', debtPayments + totalExtra, '#FBBF24'],
+      ['Avg. Spending', avgSpending, '#FF6B6B'],
+      ['Savings', savingsTarget, '#4F8EF7'],
+    ];
+
+    for (const [name, amount, color] of outflows) {
+      if (amount <= 0) continue;
+      running -= amount;
+      items.push({ name, amount: -amount, running });
     }
-    return data;
-  }, [monthlySavings]);
 
-  // Scenario comparison
-  const aggressiveExtra = Math.max(0, balance * 0.5);
-  const aggressivePayoff = monthsToPayoff(totalDebt, minPayments + aggressiveExtra);
-  const currentPayoff = monthsToPayoff(totalDebt, totalPayment);
+    items.push({ name: 'Surplus', amount: 0, running });
 
-  const comparisonTimeline = useMemo(() => {
-    const current = debtPayoffTimeline(totalDebt, totalPayment);
-    const aggressive = debtPayoffTimeline(totalDebt, minPayments + aggressiveExtra);
-    const maxLen = Math.max(current.length, aggressive.length);
-    const data = [];
-    for (let i = 0; i < maxLen; i++) {
+    // For waterfall: base (invisible) + visible segment
+    return items.map((item, i) => {
+      if (i === 0) return { name: item.name, base: 0, value: item.running, fill: '#00D4AA' };
+      if (i === items.length - 1) return { name: item.name, base: 0, value: item.running, fill: item.running >= 0 ? '#00D4AA' : '#FF6B6B' };
+      return { name: item.name, base: item.running, value: -item.amount, fill: (outflows[i - 1]?.[2] ?? '#FF6B6B') as string };
+    });
+  }, [income, fixedExp, subsCost, debtPayments, totalExtra, avgSpending, savingsTarget]);
+
+  // ─── Per-account debt timelines ─────────────────────────
+  const { debtChartData, accountMeta } = useMemo(() => {
+    if (debtAccounts.length === 0) return { debtChartData: [], accountMeta: [] };
+
+    const timelines = debtAccounts.map(acc => ({
+      id: acc.id,
+      name: acc.name,
+      color: acc.color,
+      timeline: perAccountTimeline(acc, extraPayments[acc.id] ?? 0, exchangeRate),
+    }));
+
+    const maxLen = Math.max(...timelines.map(t => t.timeline.length));
+    const data: Record<string, unknown>[] = [];
+    for (let m = 0; m < maxLen; m++) {
+      const point: Record<string, unknown> = { month: m, label: monthLabel(m) };
+      for (const t of timelines) {
+        point[t.id] = t.timeline[m]?.balance ?? 0;
+      }
+      data.push(point);
+    }
+
+    return {
+      debtChartData: data,
+      accountMeta: timelines.map(t => ({ id: t.id, name: t.name, color: t.color })),
+    };
+  }, [debtAccounts, extraPayments, exchangeRate]);
+
+  // ─── Net worth projection ───────────────────────────────
+  const netWorthData = useMemo(() => {
+    const months = Math.max(milestones.debtFreeMonths === Infinity ? 36 : milestones.debtFreeMonths + 6, 24);
+    const capped = Math.min(months, 120);
+    const data: { month: number; label: string; checking: number; debt: number; netWorth: number }[] = [];
+
+    for (let m = 0; m <= capped; m++) {
+      // Checking grows by surplus each month
+      const chk = checking + Math.max(0, surplus) * m;
+
+      // Debt decreases per account
+      let dbt = 0;
+      for (const acc of debtAccounts) {
+        const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
+        const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate) + (extraPayments[acc.id] ?? 0);
+        dbt += Math.max(0, bal - pay * m);
+      }
+
       data.push({
-        month: i,
-        current: current[i]?.balance ?? 0,
-        aggressive: aggressive[i]?.balance ?? 0,
+        month: m,
+        label: monthLabel(m),
+        checking: chk,
+        debt: -dbt,
+        netWorth: chk - dbt,
       });
     }
     return data;
-  }, [totalDebt, totalPayment, minPayments, aggressiveExtra]);
+  }, [checking, surplus, debtAccounts, exchangeRate, extraPayments, milestones.debtFreeMonths]);
+
+  // ─── Scenario comparison ────────────────────────────────
+  const scenarios = useMemo(() => {
+    if (debtAccounts.length === 0 || debt <= 0) return null;
+
+    // 1. Minimum payments only
+    const minTimeline: { month: number; total: number }[] = [{ month: 0, total: debt }];
+    let minBal = debt;
+    for (let m = 1; m <= 360 && minBal > 0; m++) {
+      minBal = Math.max(0, minBal - minPayments);
+      minTimeline.push({ month: m, total: minBal });
+    }
+    const minMonths = minPayments > 0 ? monthsToPayoff(debt, minPayments) : Infinity;
+
+    // 2. Current plan (actual payments + extras)
+    const currentTotal = debtPayments + totalExtra;
+    const currentTimeline: { month: number; total: number }[] = [{ month: 0, total: debt }];
+    let curBal = debt;
+    for (let m = 1; m <= 360 && curBal > 0; m++) {
+      curBal = Math.max(0, curBal - currentTotal);
+      currentTimeline.push({ month: m, total: curBal });
+    }
+    const currentMonths = currentTotal > 0 ? monthsToPayoff(debt, currentTotal) : Infinity;
+
+    // 3. Aggressive (snowball)
+    const surplusForSnowball = Math.max(0, income - fixedExp - subsCost - avgSpending - savingsTarget - minPayments);
+    const aggressiveTimeline = snowballPayoff(debtAccounts, surplusForSnowball, exchangeRate);
+    const aggressiveMonths = aggressiveTimeline.length > 0 ? aggressiveTimeline.length - 1 : Infinity;
+
+    // Merge into chart data
+    const maxLen = Math.max(minTimeline.length, currentTimeline.length, aggressiveTimeline.length);
+    const data: { month: number; label: string; minimum: number; current: number; aggressive: number }[] = [];
+    for (let m = 0; m < maxLen; m++) {
+      data.push({
+        month: m,
+        label: monthLabel(m),
+        minimum: minTimeline[m]?.total ?? 0,
+        current: currentTimeline[m]?.total ?? 0,
+        aggressive: aggressiveTimeline[m]?.total ?? 0,
+      });
+    }
+
+    return { data, minMonths, currentMonths, aggressiveMonths };
+  }, [debt, debtAccounts, debtPayments, totalExtra, minPayments, income, fixedExp, subsCost, avgSpending, savingsTarget, exchangeRate]);
+
+  // ─── Per-account payoff info for sliders ─────────────────
+  const sliderInfo = useMemo(() =>
+    debtAccounts.map(acc => {
+      const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
+      const basePay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate);
+      const extra = extraPayments[acc.id] ?? 0;
+      const baseMonths = basePay > 0 ? monthsToPayoff(bal, basePay) : Infinity;
+      const newMonths = (basePay + extra) > 0 ? monthsToPayoff(bal, basePay + extra) : Infinity;
+      return { acc, bal, basePay, extra, baseMonths, newMonths };
+    }),
+  [debtAccounts, exchangeRate, extraPayments]);
+
+  // ─── Render ─────────────────────────────────────────────
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Projections</h1>
-        {payoffMonths !== Infinity && (
+        {milestones.debtFreeMonths > 0 && milestones.debtFreeMonths !== Infinity && (
           <Badge className="bg-primary/10 text-primary border-primary/20">
-            Debt-free in ~{payoffMonths} months
+            Debt-free {monthLabelFull(milestones.debtFreeMonths)}
           </Badge>
         )}
       </div>
 
-      {/* Debt Payoff Sliders */}
+      {/* ── Section 1: Milestone KPIs ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MilestoneBox
+          label="Debt-Free In"
+          value={milestones.debtFreeMonths === 0 ? 'Now!' : milestones.debtFreeMonths === Infinity ? 'Never' : `${milestones.debtFreeMonths} mo`}
+          sub={milestones.debtFreeMonths > 0 && milestones.debtFreeMonths !== Infinity ? monthLabelFull(milestones.debtFreeMonths) : undefined}
+          color={milestones.debtFreeMonths === 0 ? 'text-primary' : milestones.debtFreeMonths === Infinity ? 'text-destructive' : 'text-foreground'}
+        />
+        <MilestoneBox
+          label="Net Worth"
+          value={formatCOP(milestones.netWorth)}
+          color={milestones.netWorth >= 0 ? 'text-primary' : 'text-destructive'}
+        />
+        <MilestoneBox
+          label="Emergency Fund"
+          value={milestones.emergencyMonths === Infinity ? '∞' : `${milestones.emergencyMonths.toFixed(1)} mo`}
+          sub="of expenses covered"
+          color={milestones.emergencyMonths >= 6 ? 'text-primary' : milestones.emergencyMonths >= 3 ? 'text-warning' : 'text-destructive'}
+        />
+        <MilestoneBox
+          label="Monthly Surplus"
+          value={formatCOP(surplus)}
+          sub={surplus < 0 ? 'Spending exceeds income' : 'after all outflows'}
+          color={surplus >= 0 ? 'text-primary' : 'text-destructive'}
+        />
+      </div>
+
+      {/* ── Section 2: Cash Flow Waterfall ── */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Debt Payoff — Extra Payments</CardTitle>
+          <CardTitle className="text-sm">Monthly Cash Flow</CardTitle>
+          <p className="text-xs text-muted-foreground">How your income is allocated each month</p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {accounts.map(acc => {
-            const balCOP = acc.currency === 'USD' ? acc.currentBalance * exchangeRate : acc.currentBalance;
-            return (
+        <CardContent>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={waterfallData}>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <XAxis dataKey="name" tick={TICK_STYLE} axisLine={false} tickLine={false} interval={0} angle={-30} textAnchor="end" height={50} />
+                <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value: number) => formatCOP(Math.abs(value))}
+                  labelStyle={{ color: '#94A3B8' }}
+                />
+                <ReferenceLine y={0} stroke="#334155" />
+                <Bar dataKey="base" stackId="stack" fill="transparent" />
+                <Bar dataKey="value" stackId="stack" radius={[4, 4, 0, 0]}>
+                  {waterfallData.map((d, i) => (
+                    <Cell key={i} fill={d.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Section 3: Per-Account Debt Payoff ── */}
+      {debtAccounts.length > 0 && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Debt Payoff Timeline</CardTitle>
+            <p className="text-xs text-muted-foreground">Per-account projected balance using your set payments</p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={debtChartData}>
+                  <defs>
+                    {accountMeta.map(a => (
+                      <linearGradient key={a.id} id={`grad-${a.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={a.color} stopOpacity={0.3} />
+                        <stop offset="100%" stopColor={a.color} stopOpacity={0.05} />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                  <XAxis
+                    dataKey="label"
+                    tick={TICK_STYLE}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={Math.max(0, Math.floor(debtChartData.length / 8) - 1)}
+                  />
+                  <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    formatter={(value: number, name: string) => {
+                      const meta = accountMeta.find(a => a.id === name);
+                      return [formatCOP(value), meta?.name ?? name];
+                    }}
+                    labelStyle={{ color: '#94A3B8' }}
+                  />
+                  {accountMeta.map(a => (
+                    <Area
+                      key={a.id}
+                      type="monotone"
+                      dataKey={a.id}
+                      stroke={a.color}
+                      fill={`url(#grad-${a.id})`}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-4 mt-3">
+              {accountMeta.map(a => (
+                <div key={a.id} className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: a.color }} />
+                  <span className="text-xs text-muted-foreground">{a.name}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Section 4: Net Worth Projection ── */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Net Worth Projection</CardTitle>
+          <p className="text-xs text-muted-foreground">Checking growth vs debt reduction over time</p>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={netWorthData}>
+                <defs>
+                  <linearGradient id="gradChecking" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#00D4AA" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#00D4AA" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="gradDebt" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stopColor="#FF6B6B" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#FF6B6B" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                <XAxis
+                  dataKey="label"
+                  tick={TICK_STYLE}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={Math.max(0, Math.floor(netWorthData.length / 8) - 1)}
+                />
+                <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value: number, name: string) => {
+                    const labels: Record<string, string> = { checking: 'Checking', debt: 'Debt', netWorth: 'Net Worth' };
+                    return [formatCOP(Math.abs(value)), labels[name] ?? name];
+                  }}
+                  labelStyle={{ color: '#94A3B8' }}
+                />
+                <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 4" />
+                <Area type="monotone" dataKey="checking" stroke="#00D4AA" fill="url(#gradChecking)" strokeWidth={1.5} dot={false} />
+                <Area type="monotone" dataKey="debt" stroke="#FF6B6B" fill="url(#gradDebt)" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="netWorth" stroke="#4F8EF7" strokeWidth={2.5} dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex flex-wrap gap-4 mt-3">
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-primary" /><span className="text-xs text-muted-foreground">Checking</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-destructive" /><span className="text-xs text-muted-foreground">Debt</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#4F8EF7' }} /><span className="text-xs text-muted-foreground">Net Worth</span></div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      {/* ── Section 5: What-If Sliders ── */}
+      {debtAccounts.length > 0 && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">What-If: Extra Payments</CardTitle>
+            <p className="text-xs text-muted-foreground">See how extra payments accelerate payoff</p>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {sliderInfo.map(({ acc, bal, basePay, extra, baseMonths, newMonths }) => (
               <div key={acc.id} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.color }} />
                     <Label className="text-sm">{acc.name}</Label>
                   </div>
-                  <span className="text-xs text-muted-foreground">Balance: {formatCOP(balCOP)}</span>
+                  <span className="text-xs text-muted-foreground">Bal: {formatCOP(bal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Base: {formatCOP(basePay)}/mo</span>
+                  <span>
+                    Payoff: {baseMonths === Infinity ? 'Never' : `${baseMonths} mo`}
+                    {extra > 0 && newMonths !== baseMonths && (
+                      <span className="text-primary"> → {newMonths === Infinity ? 'Never' : `${newMonths} mo`}</span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex items-center gap-4">
                   <Slider
-                    value={[extraPayments[acc.id] ?? 0]}
+                    value={[extra]}
                     onValueChange={([v]) => setExtraPayments(p => ({ ...p, [acc.id]: v }))}
                     min={0}
-                    max={Math.min(2000000, balCOP)}
-                    step={50000}
+                    max={Math.min(2_000_000, bal)}
+                    step={50_000}
                     className="flex-1"
                   />
-                  <span className="text-sm font-medium w-32 text-right">+{formatCOP(extraPayments[acc.id] ?? 0)}</span>
+                  <span className="text-sm font-medium w-32 text-right text-primary">
+                    +{formatCOP(extra)}
+                  </span>
                 </div>
               </div>
-            );
-          })}
-          <div className="flex justify-between pt-2 text-sm font-bold border-t border-border">
-            <span>Total Monthly Payment</span>
-            <span className="text-primary">{formatCOP(totalPayment)}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Debt Payoff Chart */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Debt Payoff Timeline</CardTitle></CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={timeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                <XAxis dataKey="month" tick={{ fill: '#94A3B8', fontSize: 11 }} label={{ value: 'Months', position: 'insideBottom', offset: -5, fill: '#94A3B8' }} />
-                <YAxis tick={{ fill: '#94A3B8', fontSize: 11 }} tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111827', border: '1px solid #1E293B', borderRadius: '8px' }}
-                  formatter={(value: number | undefined) => formatCOP(value ?? 0)}
-                />
-                <Line type="monotone" dataKey="balance" stroke="#FF6B6B" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Savings Projection */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Savings Projection (24 months)</CardTitle>
-          <p className="text-xs text-muted-foreground">Saving {formatCOP(monthlySavings)}/month after expenses & extra payments</p>
-        </CardHeader>
-        <CardContent>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={savingsData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                <XAxis dataKey="month" tick={{ fill: '#94A3B8', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#94A3B8', fontSize: 11 }} tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111827', border: '1px solid #1E293B', borderRadius: '8px' }}
-                  formatter={(value: number | undefined) => formatCOP(value ?? 0)}
-                />
-                <Line type="monotone" dataKey="savings" stroke="#00D4AA" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Scenario Comparison */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Scenario Comparison</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-            <div className="p-3 bg-secondary rounded-lg">
-              <p className="text-muted-foreground text-xs">Current Plan</p>
-              <p className="font-bold text-info">{currentPayoff === Infinity ? 'Never' : `${currentPayoff} months`}</p>
+            ))}
+            <Separator />
+            <div className="flex justify-between text-sm">
+              <span className="font-medium">Total Extra</span>
+              <span className="font-bold text-primary">{formatCOP(totalExtra)}</span>
             </div>
-            <div className="p-3 bg-secondary rounded-lg">
-              <p className="text-muted-foreground text-xs">Aggressive (50% of balance)</p>
-              <p className="font-bold text-primary">{aggressivePayoff === Infinity ? 'Never' : `${aggressivePayoff} months`}</p>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Remaining Surplus</span>
+              <span className={`font-medium ${surplus >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                {formatCOP(surplus)}
+              </span>
             </div>
-          </div>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={comparisonTimeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                <XAxis dataKey="month" tick={{ fill: '#94A3B8', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#94A3B8', fontSize: 11 }} tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111827', border: '1px solid #1E293B', borderRadius: '8px' }}
-                  formatter={(value: number | undefined) => formatCOP(value ?? 0)}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="current" stroke="#4F8EF7" strokeWidth={2} dot={false} name="Current" />
-                <Line type="monotone" dataKey="aggressive" stroke="#00D4AA" strokeWidth={2} dot={false} name="Aggressive" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Section 6: Scenario Comparison ── */}
+      {scenarios && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Scenario Comparison</CardTitle>
+            <p className="text-xs text-muted-foreground">Minimum vs current vs aggressive (snowball) strategy</p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="p-3 bg-secondary rounded-lg text-center">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Minimum</p>
+                <p className="font-bold text-sm text-muted-foreground">
+                  {scenarios.minMonths === Infinity ? 'Never' : `${scenarios.minMonths} mo`}
+                </p>
+              </div>
+              <div className="p-3 bg-secondary rounded-lg text-center border border-accent/30">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Current Plan</p>
+                <p className="font-bold text-sm text-accent">
+                  {scenarios.currentMonths === Infinity ? 'Never' : `${scenarios.currentMonths} mo`}
+                </p>
+                {scenarios.minMonths !== Infinity && scenarios.currentMonths < scenarios.minMonths && (
+                  <p className="text-[10px] text-primary mt-0.5">
+                    {scenarios.minMonths - scenarios.currentMonths} mo saved
+                  </p>
+                )}
+              </div>
+              <div className="p-3 bg-secondary rounded-lg text-center border border-primary/30">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Aggressive</p>
+                <p className="font-bold text-sm text-primary">
+                  {scenarios.aggressiveMonths === Infinity ? 'Never' : `${scenarios.aggressiveMonths} mo`}
+                </p>
+                {scenarios.minMonths !== Infinity && scenarios.aggressiveMonths < scenarios.minMonths && (
+                  <p className="text-[10px] text-primary mt-0.5">
+                    {scenarios.minMonths - scenarios.aggressiveMonths} mo saved
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={scenarios.data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+                  <XAxis
+                    dataKey="label"
+                    tick={TICK_STYLE}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={Math.max(0, Math.floor(scenarios.data.length / 8) - 1)}
+                  />
+                  <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    formatter={(value: number) => formatCOP(value)}
+                    labelStyle={{ color: '#94A3B8' }}
+                  />
+                  <Line type="monotone" dataKey="minimum" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="6 3" dot={false} name="Minimum" />
+                  <Line type="monotone" dataKey="current" stroke="#4F8EF7" strokeWidth={2} dot={false} name="Current" />
+                  <Line type="monotone" dataKey="aggressive" stroke="#00D4AA" strokeWidth={2} dot={false} name="Aggressive" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap gap-4 mt-3">
+              <div className="flex items-center gap-1.5"><div className="w-6 h-0.5 bg-muted-foreground" style={{ borderTop: '2px dashed #94A3B8' }} /><span className="text-xs text-muted-foreground">Minimum</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-6 h-0.5" style={{ backgroundColor: '#4F8EF7' }} /><span className="text-xs text-muted-foreground">Current Plan</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-6 h-0.5 bg-primary" /><span className="text-xs text-muted-foreground">Aggressive</span></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── Sub-components ─────────────────────────────────────────
+
+function MilestoneBox({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  return (
+    <div className="p-3 bg-card border border-border rounded-lg">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+      <p className={`font-bold text-sm ${color}`}>{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }
