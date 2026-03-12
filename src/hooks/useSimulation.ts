@@ -79,8 +79,13 @@ export function useSimulation(input: SimulationInput): SimulationOutput {
       // Build events for this month
       const monthEvents: SimEvent[] = [];
 
+      // Get the actual month number (1-12) for this simulation month
+      const simMonthNum = parseInt(month.split('-')[1], 10);
+
       for (const rule of rules) {
         if (!rule.enabled || !rule.accountId) continue;
+        // Skip annual subs in non-renewal months
+        if (rule.billingCycle === 'annual' && rule.renewalMonth != null && rule.renewalMonth !== simMonthNum) continue;
         const acc = accountMap.get(rule.accountId);
         if (!acc) continue;
 

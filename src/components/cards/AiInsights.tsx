@@ -39,7 +39,7 @@ export default function AiInsights() {
       })),
       monthlyIncome: totalMonthlyIncome(incomeSources, exchangeRate),
       monthlyExpenses: totalMonthlyExpenses(fixedExpenses, accounts, subs, exchangeRate),
-      subscriptionsCost: totalSubscriptionsCOP(subs, exchangeRate),
+      subscriptionsCost: totalSubscriptionsCOP(subs, exchangeRate, new Date().getMonth() + 1),
       activeSubscriptions: subs.filter(s => s.active).length,
       spentThisMonth: totalSpentThisMonth,
       spendingByCategory: monthSpending.reduce<Record<string, number>>((acc, e) => {

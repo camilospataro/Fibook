@@ -145,7 +145,7 @@ export default function Monthly() {
     return sum + (src.currency === 'USD' ? amt * exchangeRate : amt);
   }, 0) + (Number(sideIncome) || 0);
   const fixed = totalFixedExpenses(fixedExpenses, exchangeRate);
-  const subsCost = totalSubscriptionsCOP(subs, exchangeRate);
+  const subsCost = totalSubscriptionsCOP(subs, exchangeRate, new Date().getMonth() + 1);
   const debtMin = totalMinimumPaymentsCOP(accounts, exchangeRate);
   const totalDebt = accounts.reduce((sum, acc) => {
     const bal = Number(debtBalances[acc.id]) || 0;

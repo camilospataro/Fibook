@@ -85,7 +85,8 @@ export default function Simulation() {
         id: `sub-${sub.id}`, sourceType: 'subscription', name: sub.name,
         amount: ov?.amount ?? sub.amount, currency: sub.currency, direction: 'out',
         accountId: ov?.accountId !== undefined ? ov.accountId : sub.linkedAccountId,
-        day: ov?.day ?? 1, enabled: ov?.enabled ?? true, spread: ov?.spread ?? false,
+        day: ov?.day ?? sub.paymentDay, enabled: ov?.enabled ?? true, spread: ov?.spread ?? false,
+        billingCycle: sub.billingCycle, renewalMonth: sub.renewalMonth,
       });
     }
 

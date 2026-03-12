@@ -67,12 +67,13 @@ export function totalMonthlyExpenses(
   fixedExpenses: FixedExpense[],
   accounts: DebtAccount[],
   subs: Subscription[],
-  exchangeRate: number
+  exchangeRate: number,
+  month?: number
 ): number {
   return (
     totalFixedExpenses(fixedExpenses, exchangeRate) +
     totalDebtPaymentsCOP(accounts, exchangeRate) +
-    totalSubscriptionsCOP(subs, exchangeRate)
+    totalSubscriptionsCOP(subs, exchangeRate, month)
   );
 }
 

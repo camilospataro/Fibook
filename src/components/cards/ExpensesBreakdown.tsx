@@ -14,7 +14,7 @@ export default function ExpensesBreakdown() {
 
   const fixedTotal = totalFixedExpenses(fixedExpenses, exchangeRate);
   const debtTotal = totalMinimumPaymentsCOP(accounts, exchangeRate);
-  const subsTotal = totalSubscriptionsCOP(subs, exchangeRate);
+  const subsTotal = totalSubscriptionsCOP(subs, exchangeRate, new Date().getMonth() + 1);
   const grandTotal = fixedTotal + debtTotal + subsTotal;
 
   const sections = [

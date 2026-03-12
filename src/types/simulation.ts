@@ -9,6 +9,8 @@ export interface SimRule {
   day: number;
   enabled: boolean;
   spread: boolean;
+  billingCycle?: 'monthly' | 'annual';
+  renewalMonth?: number | null;
 }
 
 export interface SimEvent {

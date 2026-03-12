@@ -452,12 +452,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         }
       }
     }
+    const currentMonthNum = now.getMonth() + 1; // 1-12
     for (const sub of subscriptions) {
-      if (sub.active && sub.paymentDay <= today && sub.linkedAccountId) {
-        const linkedAccount = debtAccounts.find(a => a.id === sub.linkedAccountId);
-        if (linkedAccount) {
-          items.push({ sourceType: 'subscription', sourceId: sub.id, amount: sub.amount, currency: sub.currency, linkedAccountId: sub.linkedAccountId });
-        }
+      if (!sub.active || !sub.linkedAccountId || sub.paymentDay > today) continue;
+      // Annual subs only charge in their renewal month
+      if (sub.billingCycle === 'annual' && sub.renewalMonth !== currentMonthNum) continue;
+      const linkedAccount = debtAccounts.find(a => a.id === sub.linkedAccountId);
+      if (linkedAccount) {
+        items.push({ sourceType: 'subscription', sourceId: sub.id, amount: sub.amount, currency: sub.currency, linkedAccountId: sub.linkedAccountId });
       }
     }
 
