@@ -118,3 +118,67 @@
     font-family: var(--font-display);
   }
 }
+
+/* ── Theme-specific design styles ── */
+
+/* Theme 2: Glass Luxe — frosted glass cards, soft glow */
+.theme-glass .bg-card,
+.theme-glass [class*="bg-card"] {
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-color: rgba(139, 92, 246, 0.18) !important;
+}
+
+.theme-glass .bg-secondary,
+.theme-glass [class*="bg-secondary"] {
+  backdrop-filter: blur(8px);
+}
+
+.theme-glass h1, .theme-glass h2, .theme-glass h3, .theme-glass h4 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.theme-glass .border-border {
+  border-color: rgba(139, 92, 246, 0.15) !important;
+}
+
+/* Theme 3: Midnight Mono — sharp edges, strong borders, mono influence */
+.theme-mono .bg-card,
+.theme-mono [class*="bg-card"] {
+  border-width: 1px !important;
+  border-color: #3F3F46 !important;
+  border-radius: 0.375rem !important;
+  box-shadow: none !important;
+}
+
+.theme-mono h1, .theme-mono h2, .theme-mono h3, .theme-mono h4 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  font-size: 0.95em;
+}
+
+.theme-mono .text-sm {
+  font-family: 'DM Sans', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.theme-mono .rounded-lg {
+  border-radius: 0.375rem !important;
+}
+
+.theme-mono .rounded-xl {
+  border-radius: 0.5rem !important;
+}
+
+.theme-mono .border-border {
+  border-color: #3F3F46 !important;
+}
+
+/* Theme switcher top-bar offset */
+body.theme-cyber,
+body.theme-glass,
+body.theme-mono {
+  padding-top: 44px;
+}

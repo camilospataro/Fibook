@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
+import ThemeSwitcher from './ThemeSwitcher';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const fetchAll = useFinanceStore(s => s.fetchAll);
@@ -33,12 +34,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar />
-      <main className="flex-1 pb-16 md:pb-0 overflow-y-auto">
-        {children}
-      </main>
-      <BottomNav />
-    </div>
+    <>
+      <ThemeSwitcher />
+      <div className="min-h-screen bg-background flex">
+        <Sidebar />
+        <main className="flex-1 pb-16 md:pb-0 overflow-y-auto">
+          {children}
+        </main>
+        <BottomNav />
+      </div>
+    </>
   );
 }
