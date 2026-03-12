@@ -348,12 +348,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   addSpending: async (entry) => {
     const { userId } = get();
     if (!userId) return;
-    const { data } = await supabase.from('spending').insert({
+    const { data, error } = await supabase.from('spending').insert({
       user_id: userId, date: entry.date, description: entry.description, amount: entry.amount,
       category: entry.category, payment_method: entry.paymentMethod,
       linked_account_id: entry.linkedAccountId ?? null,
       linked_budget_id: entry.linkedBudgetId ?? null,
     }).select().single();
+    if (error) { console.error('addSpending error:', error); return; }
     if (data) {
       set(s => ({ spending: [mapSpending(data), ...s.spending] }));
       // Deduct from linked checking account
