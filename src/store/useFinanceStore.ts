@@ -69,6 +69,9 @@ interface FinanceState {
   updateSpending: (id: string, updates: Partial<SpendingEntry>) => Promise<void>;
   deleteSpending: (id: string) => Promise<void>;
 
+  // Debt payments
+  makeDebtPayment: (debtAccountId: string, amount: number, fromCheckingId: string) => Promise<void>;
+
   // Snapshots
   saveSnapshot: (snapshot: Omit<MonthlySnapshot, 'id' | 'userId'>) => Promise<void>;
 
@@ -715,6 +718,33 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         }
       }
     }
+  },
+
+  // Debt payments
+  makeDebtPayment: async (debtAccountId, amount, fromCheckingId) => {
+    const checking = get().checkingAccounts.find(a => a.id === fromCheckingId);
+    const debt = get().debtAccounts.find(a => a.id === debtAccountId);
+    if (!checking || !debt) return;
+    // Convert payment amount to checking account currency
+    const exchangeRate = get().settings?.exchangeRate ?? 4000;
+    const paymentInCheckingCurrency = checking.currency === debt.currency ? amount
+      : debt.currency === 'USD' ? amount * exchangeRate : amount / exchangeRate;
+    if (checking.currentBalance < paymentInCheckingCurrency) {
+      throw new Error('Insufficient balance in checking account');
+    }
+    // Cap payment at remaining debt balance
+    const effectiveAmount = Math.min(amount, debt.currentBalance);
+    const effectiveCheckingAmount = checking.currency === debt.currency ? effectiveAmount
+      : debt.currency === 'USD' ? effectiveAmount * exchangeRate : effectiveAmount / exchangeRate;
+    get()._pushUndo();
+    const newCheckingBalance = checking.currentBalance - effectiveCheckingAmount;
+    const newDebtBalance = debt.currentBalance - effectiveAmount;
+    await supabase.from('savings_accounts').update({ current_balance: newCheckingBalance }).eq('id', fromCheckingId);
+    await supabase.from('debt_accounts').update({ current_balance: newDebtBalance }).eq('id', debtAccountId);
+    set(s => ({
+      checkingAccounts: s.checkingAccounts.map(a => a.id === fromCheckingId ? { ...a, currentBalance: newCheckingBalance } : a),
+      debtAccounts: s.debtAccounts.map(a => a.id === debtAccountId ? { ...a, currentBalance: newDebtBalance } : a),
+    }));
   },
 
   // Snapshots

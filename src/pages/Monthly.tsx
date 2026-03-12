@@ -137,6 +137,10 @@ export default function Monthly() {
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null);
   const [confirmTransfer, setConfirmTransfer] = useState(false);
+  // Debt payment confirmation
+  const [confirmDebtPay, setConfirmDebtPay] = useState<string | null>(null);
+  const [debtPayAmounts, setDebtPayAmounts] = useState<Record<string, string>>({});
+  const makeDebtPayment = useFinanceStore(s => s.makeDebtPayment);
 
   // Recap
   const [showRecap, setShowRecap] = useState(false);
@@ -338,10 +342,14 @@ export default function Monthly() {
   const totalSpending = monthlySpending
     .filter(e => !(e.tags ?? []).includes('auto-charge'))
     .reduce((sum, e) => sum + e.amount, 0);
-  const debtPaid = accounts.reduce((sum, acc) => {
-    const paid = monthMode !== 'current' ? (effectiveDebtPayments[acc.id] ?? 0) : (Number(ccPayments[acc.id]) || 0);
-    return sum + (acc.currency === 'USD' ? paid * exchangeRate : paid);
-  }, 0);
+  // For current month, debtPaid comes from snapshot (actual payments made via makeDebtPayment)
+  // For future months, use projected effective debt payments
+  const debtPaid = monthMode === 'current'
+    ? (currentSnapshot?.totalDebtPaid ?? 0)
+    : accounts.reduce((sum, acc) => {
+        const paid = effectiveDebtPayments[acc.id] ?? 0;
+        return sum + (acc.currency === 'USD' ? paid * exchangeRate : paid);
+      }, 0);
   // Recurring charges on debt are already counted in fixed + subsCost, so only add the principal portion
   const totalRecurringOnDebt = [...recurringCharges.values()].reduce((s, v) => s + v, 0);
   const principalPaydown = Math.max(0, debtPaid - totalRecurringOnDebt);
@@ -859,7 +867,11 @@ export default function Monthly() {
                 <span className="text-[10px] text-muted-foreground">Paid: {formatCOP(debtPaid)}</span>
               </div>
             )}
-            {accounts.map(acc => (
+            {accounts.map(acc => {
+              const linkedChecking = acc.linkedAccountId ? checkingAccounts.find(a => a.id === acc.linkedAccountId) : null;
+              const isConfirming = confirmDebtPay === acc.id;
+              const payAmount = Number(debtPayAmounts[acc.id] ?? (acc.monthlyPayment || 0));
+              return (
               <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('debtPayments') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('debtPayments') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
@@ -871,20 +883,55 @@ export default function Monthly() {
                   </div>
                 }
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: acc.color }} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <span className="text-sm truncate block">{acc.name}</span>
                     <span className="text-[10px] text-muted-foreground">
                       {monthMode !== 'current' && (effectiveDebtBalances[acc.id] ?? acc.currentBalance) <= 0
                         ? 'Paid off — charges only'
-                        : `Min: ${formatCurrency(acc.minimumMonthlyPayment, acc.currency)}`}
+                        : `Balance: ${formatCurrency(acc.currentBalance, acc.currency)}`}
                     </span>
                   </div>
                 </div>
-                <span className="text-sm font-medium shrink-0">{formatCurrency(monthMode !== 'current' ? (effectiveDebtPayments[acc.id] ?? (acc.monthlyPayment || 0)) : (acc.monthlyPayment || 0), acc.currency)}</span>
+                {monthMode === 'current' ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isConfirming ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          value={debtPayAmounts[acc.id] ?? String(acc.monthlyPayment || 0)}
+                          onChange={e => setDebtPayAmounts(p => ({ ...p, [acc.id]: e.target.value }))}
+                          className="h-6 w-24 text-xs bg-secondary border-border"
+                        />
+                        <Button size="sm" variant="destructive" className="h-6 text-[10px] px-2" onClick={async () => {
+                          if (!linkedChecking) { toast.error('No checking account linked'); return; }
+                          try {
+                            await makeDebtPayment(acc.id, payAmount, linkedChecking.id);
+                            toast.success(`Paid ${formatCurrency(payAmount, acc.currency)} on ${acc.name}`);
+                          } catch (err) { toast.error(err instanceof Error ? err.message : 'Payment failed'); }
+                          setConfirmDebtPay(null);
+                        }}>Pay</Button>
+                        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => setConfirmDebtPay(null)}>Cancel</Button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium">{formatCurrency(acc.monthlyPayment || 0, acc.currency)}</span>
+                        {linkedChecking && acc.currentBalance > 0 && (
+                          <Button size="sm" variant="secondary" className="h-6 text-[10px] px-2" onClick={() => {
+                            setDebtPayAmounts(p => ({ ...p, [acc.id]: String(acc.monthlyPayment || 0) }));
+                            setConfirmDebtPay(acc.id);
+                          }}>Pay</Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-sm font-medium shrink-0">{formatCurrency(effectiveDebtPayments[acc.id] ?? (acc.monthlyPayment || 0), acc.currency)}</span>
+                )}
               </ItemRow>
-            ))}
+              );
+            })}
           </SectionCard>
 
           {/* Monthly Spending Transactions */}
