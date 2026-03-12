@@ -14,7 +14,7 @@ import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatCurrency, formatDate, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
 import {
   totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP,
-  totalMonthlyIncome, newChargesPerDebtAccount,
+  newChargesPerDebtAccount,
 } from '@/lib/calculations';
 import { toast } from 'sonner';
 import type { ExpenseCategory } from '@/types';
@@ -95,9 +95,6 @@ export default function Monthly() {
     monthlySpending.filter(e => e.paymentMethod.startsWith('credit_') || e.paymentMethod.startsWith('debt_')).reduce((sum, e) => sum + e.amount, 0),
     [monthlySpending]
   );
-  const ccPayments = useMemo(() =>
-    Object.fromEntries(accounts.map(a => [a.id, String(a.monthlyPayment || 0)])), [accounts]);
-
 
   // Savings
   const [savingsAmount, setSavingsAmount] = useState(String(savingsTarget));
