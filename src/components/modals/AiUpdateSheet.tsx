@@ -321,6 +321,10 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
         const parts: string[] = [];
         if (typeof action.updates?.amount === 'number') parts.push(`amount → ${formatCOP(action.updates.amount as number)}`);
         if (typeof action.updates?.active === 'boolean') parts.push(action.updates.active ? 'activate' : 'deactivate');
+        if (action.updates?.linkedAccountId !== undefined) {
+          const linked = [...debtAccounts, ...checkingAccounts].find(a => a.id === action.updates?.linkedAccountId);
+          parts.push(`charge to → ${linked?.name ?? (action.updates.linkedAccountId ? 'account' : 'none')}`);
+        }
         return `${name}: ${parts.join(', ')}`;
       }
       case 'updateSavingsTarget':

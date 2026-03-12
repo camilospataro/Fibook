@@ -62,7 +62,7 @@ Return a JSON object with this exact structure:
     {
       "type": "updateSubscription",
       "id": "<subscription id>",
-      "updates": { "amount": <number>, "active": <boolean> }
+      "updates": { "amount": <number>, "active": <boolean>, "linkedAccountId": "<account id or null>" }
     },
     {
       "type": "updateCheckingAccount",
@@ -84,6 +84,7 @@ Rules:
 - If the user mentions a specific checking account balance (e.g. "I have 5M in Bancolombia"), update the checkingAccount's currentBalance
 - For spending with a checking account payment, use "checking_<account_id>" as the paymentMethod
 - For spending with a credit card, use "debt_<account_id>" as the paymentMethod
+- Subscriptions and fixed expenses have a "linkedAccountId" field that links them to a debt or checking account for automatic charging. Use updateSubscription/updateFixedExpense with linkedAccountId to change which account they charge to
 - If the user mentions cash on hand, update the snapshot's "cashOnHand" field
 - Only include actions you're confident about. If something is ambiguous, mention it in the summary
 - Return ONLY valid JSON, no markdown, no code fences, no extra text
@@ -100,9 +101,6 @@ FILE HANDLING:
 - If the file has dates, use them; otherwise default to today
 - If you're unsure about a data point from the file, mention it in the summary rather than guessing
 - For large files, focus on the most relevant/recent data points`;
-
-    // Build the user message content parts
-    const contentParts: Array<{ type: string; text?: string; source?: Record<string, unknown> }> = [];
 
     // Add text files as text content
     const fileTexts: string[] = [];
@@ -140,22 +138,25 @@ FILE HANDLING:
       userText += `\n\nUser instructions: "Process the attached file(s) and update my financial data accordingly."`;
     }
 
-    contentParts.push({ type: "text", text: userText });
+    // Build message content — use string for text-only, array for multimodal
+    let userContent: string | Array<Record<string, unknown>>;
 
-    // Add image files as image content blocks
-    for (const img of imageFiles) {
-      contentParts.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: img.mediaType,
-          data: img.data,
-        },
-      });
-      contentParts.push({
-        type: "text",
-        text: `(The image above is from file: ${img.name})`,
-      });
+    if (imageFiles.length > 0) {
+      const parts: Array<Record<string, unknown>> = [{ type: "text", text: userText }];
+      for (const img of imageFiles) {
+        parts.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: img.mediaType,
+            data: img.data,
+          },
+        });
+        parts.push({ type: "text", text: `(The image above is from file: ${img.name})` });
+      }
+      userContent = parts;
+    } else {
+      userContent = userText;
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -172,7 +173,7 @@ FILE HANDLING:
         messages: [
           {
             role: "user",
-            content: contentParts,
+            content: userContent,
           },
         ],
       }),
