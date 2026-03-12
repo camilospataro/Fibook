@@ -347,7 +347,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
     if (updates.paymentDay !== undefined) dbUpdates.payment_day = updates.paymentDay;
     if (updates.billingCycle !== undefined) dbUpdates.billing_cycle = updates.billingCycle;
-    await supabase.from('subscriptions').update(dbUpdates).eq('id', id);
+    const { error } = await supabase.from('subscriptions').update(dbUpdates).eq('id', id);
+    if (error) { console.error('updateSubscription error:', error); return; }
     set(s => ({ subscriptions: s.subscriptions.map(sub => sub.id === id ? { ...sub, ...updates } : sub) }));
   },
   deleteSubscription: async (id) => {
