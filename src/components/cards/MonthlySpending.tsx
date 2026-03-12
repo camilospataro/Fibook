@@ -63,28 +63,43 @@ export default function MonthlySpending() {
             {expenseRows.map(exp => {
               const pct = exp.budgetCOP > 0 ? Math.min((exp.spentOnThis / exp.budgetCOP) * 100, 100) : 0;
               const over = exp.spentOnThis > exp.budgetCOP && exp.budgetCOP > 0;
+              const isFixedBill = exp.category === 'housing';
+              // Fixed bills (rent): show Paid/Pending badge
+              // Variable budgets: show % used with green-to-red bar
               return (
                 <div key={exp.id}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <div className={`w-4.5 h-4.5 rounded-full flex items-center justify-center shrink-0 ${exp.paid ? 'bg-primary/20' : 'bg-secondary'}`}>
-                        {exp.paid && <Check className="w-3 h-3 text-primary" />}
-                      </div>
-                      <span className={`text-sm ${exp.paid ? 'text-foreground' : 'text-muted-foreground'}`}>{exp.name}</span>
+                      {isFixedBill ? (
+                        <div className={`w-4.5 h-4.5 rounded-full flex items-center justify-center shrink-0 ${exp.paid ? 'bg-primary/20' : 'bg-secondary'}`}>
+                          {exp.paid && <Check className="w-3 h-3 text-primary" />}
+                        </div>
+                      ) : null}
+                      <span className="text-sm text-foreground">{exp.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">
                         {formatCOP(exp.spentOnThis)} / {formatCurrency(exp.amount, exp.currency)}
                       </span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${exp.paid ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}`}>
-                        {exp.paid ? 'Paid' : 'Pending'}
-                      </span>
+                      {isFixedBill ? (
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${exp.paid ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                          {exp.paid ? 'Paid' : 'Pending'}
+                        </span>
+                      ) : (
+                        <span className={`text-xs font-medium ${over ? 'text-destructive' : pct > 75 ? 'text-warning' : 'text-muted-foreground'}`}>
+                          {Math.round(pct)}%
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${over ? 'bg-destructive' : exp.paid ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-                      style={{ width: `${exp.paid ? Math.max(pct, 5) : 0}%` }}
+                      className={`h-full rounded-full transition-all ${
+                        isFixedBill
+                          ? (exp.paid ? 'bg-primary' : 'bg-muted-foreground/30')
+                          : over ? 'bg-destructive' : pct > 75 ? 'bg-warning' : pct > 50 ? 'bg-yellow-500' : 'bg-primary'
+                      }`}
+                      style={{ width: `${Math.max(pct, isFixedBill && !exp.paid ? 0 : pct > 0 ? Math.max(pct, 3) : 0)}%` }}
                     />
                   </div>
                 </div>
