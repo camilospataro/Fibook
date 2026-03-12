@@ -142,20 +142,35 @@ export default function Projections() {
 
   // ─── Milestones ─────────────────────────────────────────
   const milestones = useMemo(() => {
-    // Debt-free: max payoff across all accounts (using actual payments + extra)
+    // Debt-free: simulate all accounts with payments stopping when paid off
     let debtFreeMonths = 0;
-    debtAccounts.forEach(acc => {
-      const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
-      const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate);
-      const m = pay > 0 ? monthsToPayoff(bal, pay) : Infinity;
-      if (m > debtFreeMonths) debtFreeMonths = m;
-    });
+    if (debtAccounts.length > 0) {
+      const state = debtAccounts.map(acc => ({
+        balance: toCOP(acc.currentBalance, acc.currency, exchangeRate),
+        payment: toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate),
+      }));
+      for (let m = 1; m <= 360; m++) {
+        let allPaid = true;
+        for (const a of state) {
+          if (a.balance > 0) {
+            a.balance = Math.max(0, a.balance - a.payment);
+            if (a.balance > 0) allPaid = false;
+          }
+        }
+        if (allPaid) { debtFreeMonths = m; break; }
+      }
+      if (state.some(a => a.balance > 0)) debtFreeMonths = Infinity;
+    }
 
-    // Emergency fund months
-    const monthlyExp = fixedExp + subsCost + debtPayments + avgSpending;
+    // Emergency fund: uses current active debt payments only (not debts already at 0)
+    const activeDebtPayments = debtAccounts
+      .filter(a => a.currentBalance > 0)
+      .reduce((s, a) => s + toCOP(a.monthlyPayment || a.minimumMonthlyPayment, a.currency, exchangeRate), 0);
+    const monthlyExp = fixedExp + subsCost + activeDebtPayments + avgSpending;
     const emergencyMonths = monthlyExp > 0 ? checking / monthlyExp : Infinity;
 
-    // Savings target months
+    // Savings target: surplus increases as debts get paid off
+    // Use current surplus for simplicity (accurate near-term)
     const monthlySavings = Math.max(0, surplus);
     const savingsMonths = savingsTarget > 0 && monthlySavings > 0
       ? Math.ceil(savingsTarget / monthlySavings) : savingsTarget > 0 ? Infinity : 0;
@@ -163,7 +178,7 @@ export default function Projections() {
     const netWorth = checking - debt;
 
     return { debtFreeMonths, emergencyMonths, savingsMonths, netWorth };
-  }, [debtAccounts, exchangeRate, fixedExp, subsCost, debtPayments, avgSpending, checking, debt, surplus, savingsTarget]);
+  }, [debtAccounts, exchangeRate, fixedExp, subsCost, avgSpending, checking, debt, surplus, savingsTarget]);
 
   // ─── Cash flow waterfall ────────────────────────────────
   const waterfallData = useMemo(() => {
@@ -223,34 +238,57 @@ export default function Projections() {
     };
   }, [debtAccounts, exchangeRate]);
 
-  // ─── Net worth projection ───────────────────────────────
+  // ─── Net worth projection (accounts for debt payoff freeing up payments) ──
   const netWorthData = useMemo(() => {
     const months = Math.max(milestones.debtFreeMonths === Infinity ? 36 : milestones.debtFreeMonths + 6, 24);
     const capped = Math.min(months, 120);
     const data: { month: number; label: string; checking: number; debt: number; netWorth: number }[] = [];
 
+    // Track each account's balance independently
+    const accountState = debtAccounts.map(acc => ({
+      balance: toCOP(acc.currentBalance, acc.currency, exchangeRate),
+      payment: toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate),
+    }));
+
+    // Base monthly surplus (income - fixed - subs - avg spending - savings target)
+    // Debt payments are handled separately so we can free them when paid off
+    const baseSurplus = income - fixedExp - subsCost - avgSpending - savingsTarget;
+    let chk = checking;
+
     for (let m = 0; m <= capped; m++) {
-      // Checking grows by surplus each month
-      const chk = checking + Math.max(0, surplus) * m;
-
-      // Debt decreases per account
-      let dbt = 0;
-      for (const acc of debtAccounts) {
-        const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
-        const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate);
-        dbt += Math.max(0, bal - pay * m);
-      }
-
+      const totalDebt = accountState.reduce((s, a) => s + a.balance, 0);
       data.push({
         month: m,
         label: monthLabel(m),
         checking: chk,
-        debt: -dbt,
-        netWorth: chk - dbt,
+        debt: -totalDebt,
+        netWorth: chk - totalDebt,
       });
+
+      if (m === capped) break;
+
+      // Pay each account, freeing up payments from paid-off accounts
+      let freedPayments = 0;
+      for (const acc of accountState) {
+        if (acc.balance <= 0) {
+          freedPayments += acc.payment;
+          continue;
+        }
+        const pay = Math.min(acc.payment, acc.balance);
+        acc.balance = Math.max(0, acc.balance - acc.payment);
+        if (acc.balance <= 0) {
+          // Account just paid off — remaining payment is freed
+          freedPayments += acc.payment - pay;
+        }
+      }
+
+      // Checking grows by: base surplus - active debt payments + freed payments
+      const activePayments = accountState.reduce((s, a) => a.balance > 0 ? s + a.payment : s, 0);
+      const monthSurplus = baseSurplus - activePayments + freedPayments;
+      chk += Math.max(0, monthSurplus);
     }
     return data;
-  }, [checking, surplus, debtAccounts, exchangeRate, milestones.debtFreeMonths]);
+  }, [checking, income, fixedExp, subsCost, avgSpending, savingsTarget, debtAccounts, exchangeRate, milestones.debtFreeMonths]);
 
   // ─── Scenario comparison ────────────────────────────────
   const scenarios = useMemo(() => {
