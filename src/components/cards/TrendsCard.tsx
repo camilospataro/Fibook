@@ -199,36 +199,36 @@ export default function TrendsCard() {
               {metric === 'income-vs-expenses' && (
                 <>
                   <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="income" name="Income" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="income" name="Income" fill="#00D4AA" radius={[4, 4, 0, 0]}>
                     {chartData.map((d, i) => (
-                      <Cell key={i} fill="var(--income)" fillOpacity={d.projected ? 0.4 : 1} />
+                      <Cell key={i} fill="#00D4AA" fillOpacity={d.projected ? 0.4 : 1} />
                     ))}
                   </Bar>
-                  <Bar dataKey="expenses" name="Expenses" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="expenses" name="Expenses" fill="#FF6B6B" radius={[4, 4, 0, 0]}>
                     {chartData.map((d, i) => (
-                      <Cell key={i} fill="var(--expense)" fillOpacity={d.projected ? 0.4 : 1} />
+                      <Cell key={i} fill="#FF6B6B" fillOpacity={d.projected ? 0.4 : 1} />
                     ))}
                   </Bar>
                 </>
               )}
               {metric === 'debt' && (
-                <Bar dataKey="debtPaid" name="Debt Paid" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="debtPaid" name="Debt Paid" fill="#4F8EF7" radius={[4, 4, 0, 0]}>
                   {chartData.map((d, i) => (
-                    <Cell key={i} fill="var(--accent)" fillOpacity={d.projected ? 0.4 : 1} />
+                    <Cell key={i} fill="#4F8EF7" fillOpacity={d.projected ? 0.4 : 1} />
                   ))}
                 </Bar>
               )}
               {metric === 'savings' && (
-                <Bar dataKey="savings" name="Savings" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="savings" name="Savings" fill="#00D4AA" radius={[4, 4, 0, 0]}>
                   {chartData.map((d, i) => (
-                    <Cell key={i} fill="var(--income)" fillOpacity={d.projected ? 0.4 : 1} />
+                    <Cell key={i} fill="#00D4AA" fillOpacity={d.projected ? 0.4 : 1} />
                   ))}
                 </Bar>
               )}
               {metric === 'balance' && (
-                <Bar dataKey="balance" name="Balance" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="balance" name="Balance" fill="#00D4AA" radius={[4, 4, 0, 0]}>
                   {chartData.map((d, i) => (
-                    <Cell key={i} fill="var(--primary)" fillOpacity={d.projected ? 0.4 : 1} />
+                    <Cell key={i} fill="#00D4AA" fillOpacity={d.projected ? 0.4 : 1} />
                   ))}
                 </Bar>
               )}
