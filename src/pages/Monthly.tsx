@@ -102,8 +102,16 @@ export default function Monthly() {
   const [newCheckingAcct, setNewCheckingAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
   const [newIncome, setNewIncome] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', isRecurring: true, linkedAccountId: null as string | null, depositDay: 1 });
 
-  // Edit mode (one toggle per tab)
-  const [editMode, setEditMode] = useState(false);
+  // Edit mode (per card)
+  const [editingSections, setEditingSections] = useState<Set<string>>(new Set());
+  const toggleSectionEdit = (section: string) => {
+    setEditingSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) { next.delete(section); setExpandedId(null); } else next.add(section);
+      return next;
+    });
+  };
+  const isEditing = (section: string) => editingSections.has(section);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const toggleExpand = (id: string) => setExpandedId(prev => prev === id ? null : id);
 
@@ -269,16 +277,6 @@ export default function Monthly() {
             Movements
           </button>
         </div>
-        <button
-          onClick={() => { setEditMode(p => !p); setExpandedId(null); }}
-          className={`p-2.5 rounded-lg transition-all ${
-            editMode
-              ? 'bg-primary/20 text-primary'
-              : 'bg-secondary/50 text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
       </div>
 
       {/* ==================== BALANCES TAB ==================== */}
@@ -292,12 +290,14 @@ export default function Monthly() {
             subtitleColor="text-primary"
             open={openSections.checking}
             onToggle={() => toggle('checking')}
-            onAdd={editMode ? () => setShowAddChecking(true) : undefined}
+            editing={isEditing('checking')}
+            onEditToggle={() => toggleSectionEdit('checking')}
+            onAdd={isEditing('checking') ? () => setShowAddChecking(true) : undefined}
           >
             {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
             {checkingAccounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
-                onEdit={editMode ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
+              <ItemRow key={acc.id} onDelete={isEditing('checking') ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
+                onEdit={isEditing('checking') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateCheckingAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -318,12 +318,12 @@ export default function Monthly() {
               </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className={`flex items-center justify-between py-1 ${editMode ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
-              onClick={editMode ? () => toggleExpand('savings-goal') : undefined}>
+            <div className={`flex items-center justify-between py-1 ${isEditing('checking') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
+              onClick={isEditing('checking') ? () => toggleExpand('savings-goal') : undefined}>
               <span className="text-xs text-muted-foreground">Monthly savings goal</span>
               <span className="text-sm font-medium">{formatCOP(Number(savingsAmount) || 0)}</span>
             </div>
-            {editMode && expandedId === 'savings-goal' && (
+            {isEditing('checking') && expandedId === 'savings-goal' && (
               <div className="pb-2 pt-1">
                 <Input type="number" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} onBlur={saveSavingsTarget} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Monthly savings goal" />
               </div>
@@ -337,12 +337,14 @@ export default function Monthly() {
             subtitle={formatCOP(totalDebt)}
             open={openSections.debt}
             onToggle={() => toggle('debt')}
-            onAdd={editMode ? () => setShowAddDebt(true) : undefined}
+            editing={isEditing('debt')}
+            onEditToggle={() => toggleSectionEdit('debt')}
+            onAdd={isEditing('debt') ? () => setShowAddDebt(true) : undefined}
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
             {accounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
-                onEdit={editMode ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
+              <ItemRow key={acc.id} onDelete={isEditing('debt') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+                onEdit={isEditing('debt') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={acc.name} onBlur={e => { if (e.target.value !== acc.name) store.updateDebtAccount(acc.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -396,12 +398,14 @@ export default function Monthly() {
             subtitleColor="text-income"
             open={openSections.income}
             onToggle={() => toggle('income')}
-            onAdd={editMode ? () => setShowAddIncome(true) : undefined}
+            editing={isEditing('income')}
+            onEditToggle={() => toggleSectionEdit('income')}
+            onAdd={isEditing('income') ? () => setShowAddIncome(true) : undefined}
           >
             {incomeSources.length === 0 && <EmptyState text="No income sources" />}
             {incomeSources.map(src => (
-              <ItemRow key={src.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
-                onEdit={editMode ? () => toggleExpand(src.id) : undefined} expanded={expandedId === src.id}
+              <ItemRow key={src.id} onDelete={isEditing('income') ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
+                onEdit={isEditing('income') ? () => toggleExpand(src.id) : undefined} expanded={expandedId === src.id}
                 editContent={
                   <div className="pb-3 pt-1 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={src.name} onBlur={e => { if (e.target.value !== src.name) store.updateIncomeSource(src.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -424,12 +428,12 @@ export default function Monthly() {
               </ItemRow>
             ))}
             <Separator className="my-2" />
-            <div className={`flex items-center justify-between py-1 ${editMode ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
-              onClick={editMode ? () => toggleExpand('side-income') : undefined}>
+            <div className={`flex items-center justify-between py-1 ${isEditing('income') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
+              onClick={isEditing('income') ? () => toggleExpand('side-income') : undefined}>
               <span className="text-sm text-muted-foreground">Side Income</span>
               <span className="text-sm font-medium">{formatCOP(Number(sideIncome) || 0)}</span>
             </div>
-            {editMode && expandedId === 'side-income' && (
+            {isEditing('income') && expandedId === 'side-income' && (
               <div className="pb-2 pt-1">
                 <Input type="number" value={sideIncome} onChange={e => setSideIncome(e.target.value)} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Side income amount" />
               </div>
@@ -443,12 +447,14 @@ export default function Monthly() {
             subtitle={formatCOP(fixed)}
             open={openSections.expenses}
             onToggle={() => toggle('expenses')}
-            onAdd={editMode ? () => setShowAddExpense(true) : undefined}
+            editing={isEditing('expenses')}
+            onEditToggle={() => toggleSectionEdit('expenses')}
+            onAdd={isEditing('expenses') ? () => setShowAddExpense(true) : undefined}
           >
             {fixedExpenses.length === 0 && <EmptyState text="No fixed expenses yet" />}
             {fixedExpenses.map(exp => (
-              <ItemRow key={exp.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
-                onEdit={editMode ? () => toggleExpand(exp.id) : undefined} expanded={expandedId === exp.id}
+              <ItemRow key={exp.id} onDelete={isEditing('expenses') ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
+                onEdit={isEditing('expenses') ? () => toggleExpand(exp.id) : undefined} expanded={expandedId === exp.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={exp.name} onBlur={e => { if (e.target.value !== exp.name) store.updateFixedExpense(exp.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -479,7 +485,9 @@ export default function Monthly() {
             subtitle={formatCOP(subsCost)}
             open={openSections.subscriptions}
             onToggle={() => toggle('subscriptions')}
-            onAdd={editMode ? () => setShowAddSub(true) : undefined}
+            editing={isEditing('subscriptions')}
+            onEditToggle={() => toggleSectionEdit('subscriptions')}
+            onAdd={isEditing('subscriptions') ? () => setShowAddSub(true) : undefined}
           >
             {subs.length === 0 && <EmptyState text="No subscriptions yet" />}
             {subGroups.map(([groupName, groupSubs]) => (
@@ -492,8 +500,8 @@ export default function Monthly() {
                   </span>
                 </div>
                 {groupSubs.map(sub => (
-                  <ItemRow key={sub.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
-                    onEdit={editMode ? () => toggleExpand(sub.id) : undefined} expanded={expandedId === sub.id}
+                  <ItemRow key={sub.id} onDelete={isEditing('subscriptions') ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
+                    onEdit={isEditing('subscriptions') ? () => toggleExpand(sub.id) : undefined} expanded={expandedId === sub.id}
                     editContent={
                       <div className="pb-3 pt-1 pl-2 grid grid-cols-2 gap-2">
                         <div><label className="text-[10px] text-muted-foreground">Name</label><Input defaultValue={sub.name} onBlur={e => { if (e.target.value !== sub.name) store.updateSubscription(sub.id, { name: e.target.value }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -541,7 +549,9 @@ export default function Monthly() {
             subtitleColor="text-destructive"
             open={openSections.debtPayments}
             onToggle={() => toggle('debtPayments')}
-            onAdd={editMode ? () => setShowAddDebt(true) : undefined}
+            editing={isEditing('debtPayments')}
+            onEditToggle={() => toggleSectionEdit('debtPayments')}
+            onAdd={isEditing('debtPayments') ? () => setShowAddDebt(true) : undefined}
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
             {accounts.length > 0 && (
@@ -551,8 +561,8 @@ export default function Monthly() {
               </div>
             )}
             {accounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={editMode ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
-                onEdit={editMode ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
+              <ItemRow key={acc.id} onDelete={isEditing('debtPayments') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+                onEdit={isEditing('debtPayments') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-2 gap-2">
                     <div><label className="text-[10px] text-muted-foreground">Monthly Payment</label><Input type="number" defaultValue={acc.monthlyPayment || 0} onBlur={e => { const v = Number(e.target.value) || 0; if (v !== acc.monthlyPayment) store.updateDebtAccount(acc.id, { monthlyPayment: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
@@ -795,7 +805,7 @@ export default function Monthly() {
 
 // --- Sub-components ---
 
-function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggle, onAdd, children }: {
+function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggle, onAdd, editing, onEditToggle, children }: {
   icon: React.ElementType;
   title: string;
   subtitle: string;
@@ -803,6 +813,8 @@ function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggl
   open: boolean;
   onToggle: () => void;
   onAdd?: () => void;
+  editing?: boolean;
+  onEditToggle?: () => void;
   children: React.ReactNode;
 }) {
   const Chevron = open ? ChevronUp : ChevronDown;
@@ -817,6 +829,11 @@ function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggl
           </button>
           <div className="flex items-center gap-2">
             <span className={`text-sm font-bold ${subtitleColor ?? ''}`}>{subtitle}</span>
+            {onEditToggle && (
+              <button onClick={onEditToggle} className={`p-1.5 rounded-md transition-all ${editing ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
             {onAdd && (
               <Button size="sm" variant="ghost" className="text-primary h-7 px-2" onClick={onAdd}>
                 <Plus className="w-3.5 h-3.5" />
