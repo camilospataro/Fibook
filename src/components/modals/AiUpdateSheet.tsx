@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { getCurrentMonth, getToday, formatCOP } from '@/lib/formatters';
 import { Send, Loader2, Check, AlertCircle, Paperclip, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 interface Action {
   type: string;
@@ -34,14 +35,26 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-/** Read a file as text. For images/PDFs, read as base64 data URL. */
+/** Read a file as text. Excel files are converted to CSV. Images read as base64. */
 async function readFileContent(file: File): Promise<string> {
+  // Excel files: convert to CSV client-side
+  const isExcel = /\.(xlsx?|xlsm)$/i.test(file.name)
+    || file.type.includes('spreadsheet') || file.type.includes('ms-excel');
+
+  if (isExcel) {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    // Convert all sheets to CSV
+    return wb.SheetNames.map(name => {
+      const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name]);
+      return `--- Sheet: ${name} ---\n${csv}`;
+    }).join('\n\n');
+  }
+
   // Text-based files: read as text
-  const textTypes = [
+  const isText = [
     'text/', 'application/json', 'application/csv',
-    'application/vnd.ms-excel', 'application/vnd.openxmlformats',
-  ];
-  const isText = textTypes.some(t => file.type.startsWith(t))
+  ].some(t => file.type.startsWith(t))
     || /\.(csv|tsv|txt|json|xml|md)$/i.test(file.name);
 
   if (isText || !file.type) {
@@ -418,7 +431,7 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".csv,.tsv,.txt,.json,.xml,.md,.pdf,image/*"
+                accept=".csv,.tsv,.txt,.json,.xml,.md,.pdf,.xls,.xlsx,.xlsm,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*"
                 onChange={handleFileSelect}
                 className="hidden"
               />
