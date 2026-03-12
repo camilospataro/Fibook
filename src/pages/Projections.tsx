@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -7,8 +7,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Slider } from '@/components/ui/slider';
-import { Label } from '@/components/ui/label';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP } from '@/lib/formatters';
 import {
@@ -121,8 +119,6 @@ export default function Projections() {
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
   const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
 
-  const [extraPayments, setExtraPayments] = useState<Record<string, number>>({});
-
   // ─── Base calculations ──────────────────────────────────
   const income = totalMonthlyIncome(incomeSources, exchangeRate);
   const fixedExp = totalFixedExpenses(fixedExpenses, exchangeRate);
@@ -142,8 +138,7 @@ export default function Projections() {
     return recent.length > 0 ? (total / 3) : 0; // average per month over 3 months
   }, [spending]);
 
-  const totalExtra = Object.values(extraPayments).reduce((s, v) => s + v, 0);
-  const totalOutflows = fixedExp + subsCost + debtPayments + totalExtra + avgSpending + savingsTarget;
+  const totalOutflows = fixedExp + subsCost + debtPayments + avgSpending + savingsTarget;
   const surplus = income - totalOutflows;
 
   // ─── Milestones ─────────────────────────────────────────
@@ -152,7 +147,7 @@ export default function Projections() {
     let debtFreeMonths = 0;
     debtAccounts.forEach(acc => {
       const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
-      const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate) + (extraPayments[acc.id] ?? 0);
+      const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate);
       const m = pay > 0 ? monthsToPayoff(bal, pay) : Infinity;
       if (m > debtFreeMonths) debtFreeMonths = m;
     });
@@ -169,7 +164,7 @@ export default function Projections() {
     const netWorth = checking - debt;
 
     return { debtFreeMonths, emergencyMonths, savingsMonths, netWorth };
-  }, [debtAccounts, exchangeRate, extraPayments, fixedExp, subsCost, debtPayments, avgSpending, checking, debt, surplus, savingsTarget]);
+  }, [debtAccounts, exchangeRate, fixedExp, subsCost, debtPayments, avgSpending, checking, debt, surplus, savingsTarget]);
 
   // ─── Cash flow waterfall ────────────────────────────────
   const waterfallData = useMemo(() => {
@@ -181,7 +176,7 @@ export default function Projections() {
     const outflows: [string, number, string][] = [
       ['Fixed Exp.', fixedExp, '#FF6B6B'],
       ['Subscriptions', subsCost, '#FF6B6B'],
-      ['Debt Payments', debtPayments + totalExtra, '#FBBF24'],
+      ['Debt Payments', debtPayments, '#FBBF24'],
       ['Avg. Spending', avgSpending, '#FF6B6B'],
       ['Savings', savingsTarget, '#4F8EF7'],
     ];
@@ -200,7 +195,7 @@ export default function Projections() {
       if (i === items.length - 1) return { name: item.name, base: 0, value: item.running, fill: item.running >= 0 ? '#00D4AA' : '#FF6B6B' };
       return { name: item.name, base: item.running, value: -item.amount, fill: (outflows[i - 1]?.[2] ?? '#FF6B6B') as string };
     });
-  }, [income, fixedExp, subsCost, debtPayments, totalExtra, avgSpending, savingsTarget]);
+  }, [income, fixedExp, subsCost, debtPayments, avgSpending, savingsTarget]);
 
   // ─── Per-account debt timelines ─────────────────────────
   const { debtChartData, accountMeta } = useMemo(() => {
@@ -210,7 +205,7 @@ export default function Projections() {
       id: acc.id,
       name: acc.name,
       color: acc.color,
-      timeline: perAccountTimeline(acc, extraPayments[acc.id] ?? 0, exchangeRate),
+      timeline: perAccountTimeline(acc, 0, exchangeRate),
     }));
 
     const maxLen = Math.max(...timelines.map(t => t.timeline.length));
@@ -227,7 +222,7 @@ export default function Projections() {
       debtChartData: data,
       accountMeta: timelines.map(t => ({ id: t.id, name: t.name, color: t.color })),
     };
-  }, [debtAccounts, extraPayments, exchangeRate]);
+  }, [debtAccounts, exchangeRate]);
 
   // ─── Net worth projection ───────────────────────────────
   const netWorthData = useMemo(() => {
@@ -243,7 +238,7 @@ export default function Projections() {
       let dbt = 0;
       for (const acc of debtAccounts) {
         const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
-        const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate) + (extraPayments[acc.id] ?? 0);
+        const pay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate);
         dbt += Math.max(0, bal - pay * m);
       }
 
@@ -256,7 +251,7 @@ export default function Projections() {
       });
     }
     return data;
-  }, [checking, surplus, debtAccounts, exchangeRate, extraPayments, milestones.debtFreeMonths]);
+  }, [checking, surplus, debtAccounts, exchangeRate, milestones.debtFreeMonths]);
 
   // ─── Scenario comparison ────────────────────────────────
   const scenarios = useMemo(() => {
@@ -272,7 +267,7 @@ export default function Projections() {
     const minMonths = minPayments > 0 ? monthsToPayoff(debt, minPayments) : Infinity;
 
     // 2. Current plan (actual payments + extras)
-    const currentTotal = debtPayments + totalExtra;
+    const currentTotal = debtPayments;
     const currentTimeline: { month: number; total: number }[] = [{ month: 0, total: debt }];
     let curBal = debt;
     for (let m = 1; m <= 360 && curBal > 0; m++) {
@@ -300,19 +295,7 @@ export default function Projections() {
     }
 
     return { data, minMonths, currentMonths, aggressiveMonths };
-  }, [debt, debtAccounts, debtPayments, totalExtra, minPayments, income, fixedExp, subsCost, avgSpending, savingsTarget, exchangeRate]);
-
-  // ─── Per-account payoff info for sliders ─────────────────
-  const sliderInfo = useMemo(() =>
-    debtAccounts.map(acc => {
-      const bal = toCOP(acc.currentBalance, acc.currency, exchangeRate);
-      const basePay = toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate);
-      const extra = extraPayments[acc.id] ?? 0;
-      const baseMonths = basePay > 0 ? monthsToPayoff(bal, basePay) : Infinity;
-      const newMonths = (basePay + extra) > 0 ? monthsToPayoff(bal, basePay + extra) : Infinity;
-      return { acc, bal, basePay, extra, baseMonths, newMonths };
-    }),
-  [debtAccounts, exchangeRate, extraPayments]);
+  }, [debt, debtAccounts, debtPayments, minPayments, income, fixedExp, subsCost, avgSpending, savingsTarget, exchangeRate]);
 
   // ─── Render ─────────────────────────────────────────────
 
@@ -503,63 +486,7 @@ export default function Projections() {
 
       <Separator />
 
-      {/* ── Section 5: What-If Sliders ── */}
-      {debtAccounts.length > 0 && (
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">What-If: Extra Payments</CardTitle>
-            <p className="text-xs text-muted-foreground">See how extra payments accelerate payoff</p>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {sliderInfo.map(({ acc, bal, basePay, extra, baseMonths, newMonths }) => (
-              <div key={acc.id} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: acc.color }} />
-                    <Label className="text-sm">{acc.name}</Label>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Bal: {formatCOP(bal)}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Base: {formatCOP(basePay)}/mo</span>
-                  <span>
-                    Payoff: {baseMonths === Infinity ? 'Never' : `${baseMonths} mo`}
-                    {extra > 0 && newMonths !== baseMonths && (
-                      <span className="text-primary"> → {newMonths === Infinity ? 'Never' : `${newMonths} mo`}</span>
-                    )}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Slider
-                    value={[extra]}
-                    onValueChange={([v]) => setExtraPayments(p => ({ ...p, [acc.id]: v }))}
-                    min={0}
-                    max={Math.min(2_000_000, bal)}
-                    step={50_000}
-                    className="flex-1"
-                  />
-                  <span className="text-sm font-medium w-32 text-right text-primary">
-                    +{formatCOP(extra)}
-                  </span>
-                </div>
-              </div>
-            ))}
-            <Separator />
-            <div className="flex justify-between text-sm">
-              <span className="font-medium">Total Extra</span>
-              <span className="font-bold text-primary">{formatCOP(totalExtra)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Remaining Surplus</span>
-              <span className={`font-medium ${surplus >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                {formatCOP(surplus)}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Section 6: Scenario Comparison ── */}
+      {/* ── Scenario Comparison ── */}
       {scenarios && (
         <Card className="bg-card border-border">
           <CardHeader className="pb-2">
