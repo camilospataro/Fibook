@@ -36,8 +36,12 @@ export default function Monthly() {
   const { debtAccounts: accounts, checkingAccounts, incomeSources, fixedExpenses, subscriptions: subs, spending } = store;
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
   const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
+  const savingsSourceId = useFinanceStore(s => s.settings?.savingsSourceAccountId ?? null);
+  const savingsDestId = useFinanceStore(s => s.settings?.savingsDestAccountId ?? null);
   const saveSnapshot = useFinanceStore(s => s.saveSnapshot);
   const updateSavingsTarget = useFinanceStore(s => s.updateSavingsTarget);
+  const updateSavingsAccounts = useFinanceStore(s => s.updateSavingsAccounts);
+  const executeSavingsTransfer = useFinanceStore(s => s.executeSavingsTransfer);
 
   const [aiUpdateOpen, setAiUpdateOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth);
@@ -300,10 +304,22 @@ export default function Monthly() {
           : cost / exchangeRate;
         acc.balance -= amt * direction;
       }
+
+      // Savings transfer between checking accounts
+      if (savingsSourceId && savingsDestId && savingsTarget > 0) {
+        const src = state.find(a => a.id === savingsSourceId);
+        const dst = state.find(a => a.id === savingsDestId);
+        if (src && dst) {
+          const srcAmt = src.currency === 'COP' ? savingsTarget : savingsTarget / exchangeRate;
+          const dstAmt = dst.currency === 'COP' ? savingsTarget : savingsTarget / exchangeRate;
+          src.balance -= srcAmt * direction;
+          dst.balance += dstAmt * direction;
+        }
+      }
     }
 
     return Object.fromEntries(state.map(a => [a.id, a.balance]));
-  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, monthOffset, recurringCharges, nowMonth]);
+  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, monthOffset, recurringCharges, nowMonth, savingsSourceId, savingsDestId, savingsTarget]);
 
   // ─── Calculations (using effective balances) ──────────
   const totalIncome = incomeSources.reduce((sum, src) => {
@@ -333,7 +349,8 @@ export default function Monthly() {
     ? subsCost + principalPaydown + totalSpending
     : fixed + subsCost + principalPaydown;
   const savingsVal = Number(savingsAmount) || 0;
-  const balance = totalIncome - totalExpenses - savingsVal;
+  // Savings is an internal transfer (checking → savings account), not an expense
+  const balance = totalIncome - totalExpenses;
   const totalChecking = checkingAccounts.reduce((sum, acc) => {
     const bal = effectiveCheckingBalances[acc.id] ?? acc.currentBalance;
     return sum + (acc.currency === 'USD' ? bal * exchangeRate : bal);
@@ -508,13 +525,45 @@ export default function Monthly() {
             ))}
             <Separator className="my-2" />
             <div className={`flex items-center justify-between py-1 ${!isReadOnly && isEditing('checking') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
-              onClick={!isReadOnly && isEditing('checking') ? () => toggleExpand('savings-goal') : undefined}>
-              <span className="text-xs text-muted-foreground">Monthly savings goal</span>
-              <span className="text-sm font-medium">{formatCOP(Number(savingsAmount) || 0)}</span>
+              onClick={!isReadOnly && isEditing('checking') ? () => toggleExpand('savings-transfer') : undefined}>
+              <div className="min-w-0">
+                <span className="text-xs text-muted-foreground block">Monthly savings transfer</span>
+                {savingsSourceId && savingsDestId && (
+                  <span className="text-[10px] text-muted-foreground/70">
+                    {checkingAccounts.find(a => a.id === savingsSourceId)?.name ?? '?'} → {checkingAccounts.find(a => a.id === savingsDestId)?.name ?? '?'}
+                  </span>
+                )}
+              </div>
+              <span className="text-sm font-medium shrink-0">{formatCOP(Number(savingsAmount) || 0)}</span>
             </div>
-            {!isReadOnly && isEditing('checking') && expandedId === 'savings-goal' && (
-              <div className="pb-2 pt-1">
-                <Input type="number" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} onBlur={saveSavingsTarget} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Monthly savings goal" />
+            {!isReadOnly && isEditing('checking') && expandedId === 'savings-transfer' && (
+              <div className="pb-3 pt-1 space-y-2">
+                <div><label className="text-[10px] text-muted-foreground">Amount (COP)</label>
+                  <Input type="number" value={savingsAmount} onChange={e => setSavingsAmount(e.target.value)} onBlur={saveSavingsTarget} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Monthly savings amount" />
+                </div>
+                <div><label className="text-[10px] text-muted-foreground">From</label>
+                  <Select value={savingsSourceId ?? 'none'} onValueChange={v => updateSavingsAccounts(v === 'none' ? null : v, savingsDestId)}>
+                    <SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Select account</SelectItem>
+                      {checkingAccounts.filter(a => a.id !== savingsDestId).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><label className="text-[10px] text-muted-foreground">To (savings)</label>
+                  <Select value={savingsDestId ?? 'none'} onValueChange={v => updateSavingsAccounts(savingsSourceId, v === 'none' ? null : v)}>
+                    <SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Select account</SelectItem>
+                      {checkingAccounts.filter(a => a.id !== savingsSourceId).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {monthMode === 'current' && savingsSourceId && savingsDestId && (Number(savingsAmount) || 0) > 0 && (
+                  <Button size="sm" variant="secondary" className="w-full text-xs" onClick={async () => { await executeSavingsTransfer(); toast.success('Savings transferred'); }}>
+                    Transfer {formatCOP(Number(savingsAmount) || 0)} now
+                  </Button>
+                )}
               </div>
             )}
           </SectionCard>
@@ -563,7 +612,7 @@ export default function Monthly() {
             <CardContent className="space-y-2">
               <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
               <SummaryRow label="Total Debt" value={formatCOP(totalDebt)} color="text-destructive" />
-              <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
+              {savingsVal > 0 && <SummaryRow label="Savings Transfer" value={formatCOP(savingsVal)} color="text-muted-foreground" />}
               <Separator />
               <div className="flex justify-between font-bold text-sm pt-1">
                 <span>Net Position</span>
@@ -879,7 +928,7 @@ export default function Monthly() {
               }
               <SummaryRow label="Subscriptions" value={formatCOP(subsCost)} />
               <SummaryRow label="Debt Paydown" value={formatCOP(principalPaydown)} />
-              <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
+              {savingsVal > 0 && <SummaryRow label="Savings Transfer" value={formatCOP(savingsVal)} color="text-muted-foreground" />}
               <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
               <Separator />
               <div className="flex justify-between font-bold text-sm pt-1">

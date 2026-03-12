@@ -22,6 +22,8 @@ interface FinanceState {
   updateExchangeRate: (rate: number) => Promise<void>;
   refreshExchangeRate: () => Promise<void>;
   updateSavingsTarget: (amount: number) => Promise<void>;
+  updateSavingsAccounts: (sourceId: string | null, destId: string | null) => Promise<void>;
+  executeSavingsTransfer: () => Promise<void>;
 
   // Debt accounts
   addDebtAccount: (account: Omit<DebtAccount, 'id' | 'userId'>) => Promise<void>;
@@ -61,7 +63,7 @@ interface FinanceState {
 }
 
 function mapSettings(row: Record<string, unknown>): Settings {
-  return { id: row.id as string, userId: row.user_id as string, exchangeRate: row.exchange_rate as number, exchangeRateUpdatedAt: (row.exchange_rate_updated_at as string) ?? null, savingsTarget: (row.savings_target as number) ?? 0 };
+  return { id: row.id as string, userId: row.user_id as string, exchangeRate: row.exchange_rate as number, exchangeRateUpdatedAt: (row.exchange_rate_updated_at as string) ?? null, savingsTarget: (row.savings_target as number) ?? 0, savingsSourceAccountId: (row.savings_source_account_id as string) ?? null, savingsDestAccountId: (row.savings_dest_account_id as string) ?? null };
 }
 
 function mapDebt(row: Record<string, unknown>): DebtAccount {
@@ -223,6 +225,36 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!userId || !settings) return;
     await supabase.from('settings').update({ savings_target: amount }).eq('user_id', userId);
     set({ settings: { ...settings, savingsTarget: amount } });
+  },
+  updateSavingsAccounts: async (sourceId, destId) => {
+    const { userId, settings } = get();
+    if (!userId || !settings) return;
+    await supabase.from('settings').update({ savings_source_account_id: sourceId, savings_dest_account_id: destId }).eq('user_id', userId);
+    set({ settings: { ...settings, savingsSourceAccountId: sourceId, savingsDestAccountId: destId } });
+  },
+  executeSavingsTransfer: async () => {
+    const { settings, checkingAccounts } = get();
+    if (!settings || !settings.savingsSourceAccountId || !settings.savingsDestAccountId || settings.savingsTarget <= 0) return;
+    const source = checkingAccounts.find(a => a.id === settings.savingsSourceAccountId);
+    const dest = checkingAccounts.find(a => a.id === settings.savingsDestAccountId);
+    if (!source || !dest) return;
+    // Convert amount if currencies differ
+    const exchangeRate = settings.exchangeRate;
+    const amountInSourceCurrency = source.currency === 'COP' ? settings.savingsTarget
+      : settings.savingsTarget / exchangeRate; // savingsTarget is in COP
+    const amountInDestCurrency = dest.currency === 'COP' ? settings.savingsTarget
+      : settings.savingsTarget / exchangeRate;
+    const newSourceBalance = source.currentBalance - amountInSourceCurrency;
+    const newDestBalance = dest.currentBalance + amountInDestCurrency;
+    await supabase.from('savings_accounts').update({ current_balance: newSourceBalance }).eq('id', source.id);
+    await supabase.from('savings_accounts').update({ current_balance: newDestBalance }).eq('id', dest.id);
+    set(s => ({
+      checkingAccounts: s.checkingAccounts.map(a =>
+        a.id === source.id ? { ...a, currentBalance: newSourceBalance }
+        : a.id === dest.id ? { ...a, currentBalance: newDestBalance }
+        : a
+      ),
+    }));
   },
 
   // Debt accounts

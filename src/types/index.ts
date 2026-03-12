@@ -4,6 +4,8 @@ export interface Settings {
   exchangeRate: number;
   exchangeRateUpdatedAt: string | null;
   savingsTarget: number;
+  savingsSourceAccountId: string | null;
+  savingsDestAccountId: string | null;
 }
 
 export interface DebtAccount {
