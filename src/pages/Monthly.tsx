@@ -193,6 +193,30 @@ export default function Monthly() {
     return Object.fromEntries(state.map(a => [a.id, a.balance]));
   }, [monthMode, currentSnapshot, accounts, monthOffset, recurringCharges, exchangeRate]);
 
+  // Effective debt payments: for future months, adjust based on remaining balance
+  const effectiveDebtPayments = useMemo<Record<string, number>>(() => {
+    if (monthMode === 'current') {
+      return Object.fromEntries(accounts.map(a => [a.id, a.monthlyPayment || 0]));
+    }
+    // For past months, use the stored payment (same as current logic)
+    if (monthMode === 'past') {
+      return Object.fromEntries(accounts.map(a => [a.id, a.monthlyPayment || 0]));
+    }
+    // Future: if debt is paid off, only new charges remain; if balance < payment, cap it
+    return Object.fromEntries(accounts.map(a => {
+      const bal = effectiveDebtBalances[a.id] ?? a.currentBalance;
+      const payment = a.monthlyPayment || a.minimumMonthlyPayment;
+      const chargesCOP = recurringCharges.get(a.id) ?? 0;
+      const chargesNative = a.currency === 'USD' ? chargesCOP / exchangeRate : chargesCOP;
+      if (bal <= 0) {
+        // Debt paid off — only recurring charges
+        return [a.id, chargesNative];
+      }
+      // Cap payment at remaining balance + new charges
+      return [a.id, Math.min(payment, bal + chargesNative)];
+    }));
+  }, [monthMode, accounts, effectiveDebtBalances, recurringCharges, exchangeRate]);
+
   // Effective checking balances per account — tracks per-account flows via linkedAccountId
   const effectiveCheckingBalances = useMemo<Record<string, number>>(() => {
     if (monthMode === 'current') {
@@ -206,6 +230,13 @@ export default function Monthly() {
     // Project per-account using linked relationships
     const checkingIds = new Set(checkingAccounts.map(a => a.id));
     const state = checkingAccounts.map(a => ({ id: a.id, balance: a.currentBalance, currency: a.currency }));
+
+    // Track debt balances in tandem so we know when debts are paid off
+    const debtState = accounts.map(a => {
+      const chargesCOP = recurringCharges.get(a.id) ?? 0;
+      const chargesNative = a.currency === 'USD' ? chargesCOP / exchangeRate : chargesCOP;
+      return { id: a.id, balance: a.currentBalance, payment: a.monthlyPayment || a.minimumMonthlyPayment, newCharges: chargesNative, currency: a.currency, linkedAccountId: a.linkedAccountId };
+    });
 
     const absOffset = Math.abs(monthOffset);
     const direction = monthOffset > 0 ? 1 : -1; // +1 future, -1 past without snapshot
@@ -221,15 +252,26 @@ export default function Monthly() {
         acc.balance += amt * direction;
       }
 
-      // Debt payments from linked checking accounts
-      for (const debt of accounts) {
+      // Debt payments from linked checking accounts (adjusted for payoff)
+      for (const debt of debtState) {
         if (!debt.linkedAccountId || !checkingIds.has(debt.linkedAccountId)) continue;
         const acc = state.find(a => a.id === debt.linkedAccountId)!;
-        const payment = debt.monthlyPayment || debt.minimumMonthlyPayment;
-        const amt = debt.currency === acc.currency ? payment
-          : debt.currency === 'USD' ? payment * exchangeRate
-          : payment / exchangeRate;
+        // Calculate effective payment based on remaining balance
+        let effectivePayment: number;
+        if (debt.balance <= 0) {
+          effectivePayment = debt.newCharges;
+        } else {
+          effectivePayment = Math.min(debt.payment, debt.balance + debt.newCharges);
+        }
+        const amt = debt.currency === acc.currency ? effectivePayment
+          : debt.currency === 'USD' ? effectivePayment * exchangeRate
+          : effectivePayment / exchangeRate;
         acc.balance -= amt * direction;
+      }
+
+      // Advance debt balances for this month
+      for (const d of debtState) {
+        d.balance = Math.max(0, d.balance + d.newCharges - d.payment);
       }
 
       // Fixed expenses (auto) from linked checking accounts
@@ -256,7 +298,7 @@ export default function Monthly() {
     }
 
     return Object.fromEntries(state.map(a => [a.id, a.balance]));
-  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, monthOffset]);
+  }, [monthMode, currentSnapshot, checkingAccounts, incomeSources, fixedExpenses, subs, accounts, exchangeRate, monthOffset, recurringCharges]);
 
   // ─── Calculations (using effective balances) ──────────
   const totalIncome = incomeSources.reduce((sum, src) => {
@@ -272,7 +314,7 @@ export default function Monthly() {
   }, 0);
   const totalSpending = monthlySpending.reduce((sum, e) => sum + e.amount, 0);
   const debtPaid = accounts.reduce((sum, acc) => {
-    const paid = Number(ccPayments[acc.id]) || 0;
+    const paid = monthMode !== 'current' ? (effectiveDebtPayments[acc.id] ?? 0) : (Number(ccPayments[acc.id]) || 0);
     return sum + (acc.currency === 'USD' ? paid * exchangeRate : paid);
   }, 0);
   const totalExpenses = fixed + subsCost + debtPaid + totalSpending;
@@ -757,11 +799,13 @@ export default function Monthly() {
                   <div className="min-w-0">
                     <span className="text-sm truncate block">{acc.name}</span>
                     <span className="text-[10px] text-muted-foreground">
-                      Min: {formatCurrency(acc.minimumMonthlyPayment, acc.currency)}
+                      {monthMode !== 'current' && (effectiveDebtBalances[acc.id] ?? acc.currentBalance) <= 0
+                        ? 'Paid off — charges only'
+                        : `Min: ${formatCurrency(acc.minimumMonthlyPayment, acc.currency)}`}
                     </span>
                   </div>
                 </div>
-                <span className="text-sm font-medium shrink-0">{formatCurrency(acc.monthlyPayment || 0, acc.currency)}</span>
+                <span className="text-sm font-medium shrink-0">{formatCurrency(monthMode !== 'current' ? (effectiveDebtPayments[acc.id] ?? (acc.monthlyPayment || 0)) : (acc.monthlyPayment || 0), acc.currency)}</span>
               </ItemRow>
             ))}
           </SectionCard>
