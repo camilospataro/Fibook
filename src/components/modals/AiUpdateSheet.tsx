@@ -94,6 +94,7 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
   const updateFixedExpense = useFinanceStore(s => s.updateFixedExpense);
   const updateSubscription = useFinanceStore(s => s.updateSubscription);
   const updateSavingsTarget = useFinanceStore(s => s.updateSavingsTarget);
+  const addSubscription = useFinanceStore(s => s.addSubscription);
   const addSpending = useFinanceStore(s => s.addSpending);
   const saveSnapshot = useFinanceStore(s => s.saveSnapshot);
 
@@ -272,6 +273,11 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
               await updateSavingsTarget(action.amount);
             }
             break;
+          case 'addSubscription':
+            if (action.data) {
+              await addSubscription(action.data as Omit<import('@/types').Subscription, 'id' | 'userId'>);
+            }
+            break;
           case 'addSpending':
             if (action.data) {
               await addSpending(action.data as Omit<import('@/types').SpendingEntry, 'id' | 'userId'>);
@@ -345,6 +351,11 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
       }
       case 'updateSavingsTarget':
         return `Savings target → ${formatCOP(action.amount ?? 0)}/month`;
+      case 'addSubscription': {
+        const d = action.data ?? {};
+        const cycle = d.billingCycle === 'annual' ? '/yr' : '/mo';
+        return `Add subscription: ${d.name} — ${formatCOP(d.amount as number ?? 0)}${cycle}`;
+      }
       case 'addSpending': {
         const d = action.data ?? {};
         return `Add spending: ${d.description} — ${formatCOP(d.amount as number ?? 0)}`;

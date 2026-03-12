@@ -70,6 +70,10 @@ Return a JSON object with this exact structure:
       "updates": { "currentBalance": <number> }
     },
     {
+      "type": "addSubscription",
+      "data": { "name": "<string>", "amount": <number>, "currency": "<COP|USD>", "group": "<string>", "active": true, "billingCycle": "<monthly|annual>", "paymentDay": <1-31>, "linkedAccountId": "<account id or null>" }
+    },
+    {
       "type": "addSpending",
       "data": { "date": "YYYY-MM-DD", "description": "<string>", "amount": <number>, "category": "<groceries|transport|food|entertainment|health|shopping|other>", "paymentMethod": "<cash|debit|credit_mastercard_cop|credit_mastercard_usd|credit_visa|checking_ACCOUNT_ID|debt_ACCOUNT_ID>" }
     }
@@ -86,6 +90,8 @@ Rules:
 - For spending with a credit card, use "debt_<account_id>" as the paymentMethod
 - Subscriptions and fixed expenses have a "linkedAccountId" field that links them to a debt or checking account for automatic charging. Use updateSubscription/updateFixedExpense with linkedAccountId to change which account they charge to
 - If the user mentions cash on hand, update the snapshot's "cashOnHand" field
+- If the user wants to add NEW subscriptions (not update existing ones), use "addSubscription" with a data object. Use "updateSubscription" only for existing subscriptions matched by ID
+- For new subscriptions, infer the group from context (e.g. "Domains", "Streaming", "Software", "General") and default billingCycle to "monthly" unless specified as annual/yearly
 - Only include actions you're confident about. If something is ambiguous, mention it in the summary
 - Return ONLY valid JSON, no markdown, no code fences, no extra text
 - For spending entries, infer the category and default payment method to "debit" unless specified
