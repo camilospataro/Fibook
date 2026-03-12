@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -48,20 +48,42 @@ export default function Spending() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<SpendingCategory | 'all'>('all');
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [editTagInput, setEditTagInput] = useState('');
+
+  // Collect all unique tags from current month's spending
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    for (const e of spending) {
+      if (e.date.startsWith(selectedMonth)) {
+        for (const t of (e.tags ?? [])) tags.add(t);
+      }
+    }
+    return Array.from(tags).sort();
+  }, [spending, selectedMonth]);
 
   const filtered = useMemo(() => {
     return spending.filter(e => {
       const matchMonth = e.date.startsWith(selectedMonth);
       const matchCat = selectedCategory === 'all' || e.category === selectedCategory;
-      return matchMonth && matchCat;
+      const matchTag = !selectedTag || (e.tags ?? []).includes(selectedTag);
+      return matchMonth && matchCat && matchTag;
     });
-  }, [spending, selectedMonth, selectedCategory]);
+  }, [spending, selectedMonth, selectedCategory, selectedTag]);
 
   const totalSpent = filtered.reduce((sum, e) => sum + e.amount, 0);
 
   async function handleDelete(id: string) {
     await deleteSpending(id);
     toast.success('Entry deleted');
+  }
+
+  function handleAddEditTag(entryId: string, currentTags: string[]) {
+    const t = editTagInput.trim().toLowerCase();
+    if (t && !currentTags.includes(t)) {
+      updateSpending(entryId, { tags: [...currentTags, t] });
+    }
+    setEditTagInput('');
   }
 
   return (
@@ -100,6 +122,30 @@ export default function Spending() {
         ))}
       </div>
 
+      {/* Tag Filters */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Tags:</span>
+          <Badge
+            variant={!selectedTag ? 'default' : 'outline'}
+            className="cursor-pointer text-[10px]"
+            onClick={() => setSelectedTag(null)}
+          >
+            All
+          </Badge>
+          {allTags.map(tag => (
+            <Badge
+              key={tag}
+              variant={selectedTag === tag ? 'default' : 'outline'}
+              className="cursor-pointer text-[10px]"
+              onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+            >
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      )}
+
       {/* Summary Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-card border-border">
@@ -125,10 +171,15 @@ export default function Spending() {
                   <div className="flex items-center justify-between py-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{entry.description}</p>
-                      <div className="flex gap-2 mt-0.5 items-center">
+                      <div className="flex gap-2 mt-0.5 items-center flex-wrap">
                         <span className="text-xs text-muted-foreground">{formatDate(entry.date)}</span>
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{categoryLabels[entry.category]}</Badge>
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">{paymentLabel[entry.paymentMethod]}</Badge>
+                        {(entry.tags ?? []).map(tag => (
+                          <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0 border-primary/30 text-primary/80">
+                            {tag}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -150,6 +201,26 @@ export default function Spending() {
                         <Select value={entry.category} onValueChange={v => updateSpending(entry.id, { category: v as SpendingCategory })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{allCategories.map(c => <SelectItem key={c} value={c}>{categoryLabels[c]}</SelectItem>)}</SelectContent></Select></div>
                       <div className="sm:col-span-2"><label className="text-[10px] text-muted-foreground">Payment Method</label>
                         <Select value={entry.paymentMethod} onValueChange={v => updateSpending(entry.id, { paymentMethod: v as PaymentMethod })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{allPaymentMethods.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="sm:col-span-2">
+                        <label className="text-[10px] text-muted-foreground">Tags</label>
+                        <div className="flex gap-1 flex-wrap mb-1">
+                          {(entry.tags ?? []).map(tag => (
+                            <Badge key={tag} variant="secondary" className="text-[10px] gap-0.5">
+                              {tag}
+                              <button onClick={() => updateSpending(entry.id, { tags: (entry.tags ?? []).filter(t => t !== tag) })} className="hover:text-destructive">
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                        <Input
+                          value={editTagInput}
+                          onChange={e => setEditTagInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddEditTag(entry.id, entry.tags ?? []); } }}
+                          placeholder="Add tag + Enter"
+                          className="h-7 text-xs bg-secondary border-border"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

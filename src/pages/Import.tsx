@@ -153,7 +153,7 @@ export default function Import() {
           date: e.date, description: e.description, amount: e.amount,
           category: e.category as 'groceries' | 'transport' | 'food' | 'entertainment' | 'health' | 'shopping' | 'other',
           paymentMethod: e.payment_method as 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa',
-          linkedAccountId: null, linkedBudgetId: null,
+          linkedAccountId: null, linkedBudgetId: null, tags: [],
         });
       }
 

@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
+import { X } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { getToday, formatCurrency } from '@/lib/formatters';
@@ -39,7 +41,15 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const [category, setCategory] = useState<SpendingCategory>('other');
   const [payFromId, setPayFromId] = useState<string>('none');
   const [linkedBudgetId, setLinkedBudgetId] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  function addTag() {
+    const t = tagInput.trim().toLowerCase();
+    if (t && !tags.includes(t)) { setTags([...tags, t]); }
+    setTagInput('');
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,6 +66,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
       paymentMethod: payFromId === 'none' ? 'cash' : payFromId as `checking_${string}` | `debt_${string}`,
       linkedAccountId: isChecking ? accountId : null,
       linkedBudgetId,
+      tags,
     });
     toast.success('Spending added');
     setDescription('');
@@ -63,6 +74,8 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
     setCategory('other');
     setPayFromId('none');
     setLinkedBudgetId(null);
+    setTags([]);
+    setTagInput('');
     setDate(getToday());
     setSaving(false);
     onOpenChange(false);
@@ -137,6 +150,26 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <div className="flex gap-1.5 flex-wrap">
+              {tags.map(tag => (
+                <Badge key={tag} variant="secondary" className="text-xs gap-1">
+                  {tag}
+                  <button type="button" onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-destructive">
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <Input
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+              placeholder="Type a tag and press Enter"
+              className="bg-secondary border-border"
+            />
           </div>
           <Button type="submit" className="w-full" disabled={saving}>
             {saving ? 'Saving...' : 'Add Spending'}

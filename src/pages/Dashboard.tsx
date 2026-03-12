@@ -7,6 +7,8 @@ import SubscriptionsSummary from '@/components/cards/SubscriptionsSummary';
 import SavingsProgress from '@/components/cards/SavingsProgress';
 import AiInsights from '@/components/cards/AiInsights';
 import ExpensesBreakdown from '@/components/cards/ExpensesBreakdown';
+import TrendsCard from '@/components/cards/TrendsCard';
+import NetWorthCard from '@/components/cards/NetWorthCard';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { totalDebtCOP, totalCheckingCOP, totalMonthlyIncome, totalMonthlyExpenses } from '@/lib/calculations';
 
@@ -43,6 +45,12 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <DebtPayoffChart />
         <SavingsProjectionChart />
+      </div>
+
+      {/* Net Worth & Trends */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <NetWorthCard />
+        <TrendsCard />
       </div>
 
       {/* AI Insights */}

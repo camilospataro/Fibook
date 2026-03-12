@@ -124,6 +124,7 @@ function mapSpending(row: Record<string, unknown>): SpendingEntry {
     paymentMethod: row.payment_method as SpendingEntry['paymentMethod'],
     linkedAccountId: (row.linked_account_id as string) ?? null,
     linkedBudgetId: (row.linked_budget_id as string) ?? null,
+    tags: (row.tags as string[]) ?? [],
   };
 }
 
@@ -367,6 +368,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       category: entry.category, payment_method: entry.paymentMethod,
       linked_account_id: entry.linkedAccountId ?? null,
       linked_budget_id: entry.linkedBudgetId ?? null,
+      tags: entry.tags ?? [],
     }).select().single();
     if (error) { console.error('addSpending error:', error); return; }
     if (data) {
@@ -402,12 +404,36 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.paymentMethod !== undefined) dbUpdates.payment_method = updates.paymentMethod;
     if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
     if (updates.linkedBudgetId !== undefined) dbUpdates.linked_budget_id = updates.linkedBudgetId;
+    if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
     await supabase.from('spending').update(dbUpdates).eq('id', id);
     set(s => ({ spending: s.spending.map(e => e.id === id ? { ...e, ...updates } : e) }));
   },
   deleteSpending: async (id) => {
+    // Find entry before deleting to reverse balance changes
+    const entry = get().spending.find(e => e.id === id);
     await supabase.from('spending').delete().eq('id', id);
     set(s => ({ spending: s.spending.filter(e => e.id !== id) }));
+    if (entry) {
+      // Reverse checking account deduction
+      if (entry.linkedAccountId) {
+        const account = get().checkingAccounts.find(a => a.id === entry.linkedAccountId);
+        if (account) {
+          const newBalance = account.currentBalance + entry.amount;
+          await supabase.from('savings_accounts').update({ current_balance: newBalance }).eq('id', entry.linkedAccountId);
+          set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === entry.linkedAccountId ? { ...a, currentBalance: newBalance } : a) }));
+        }
+      }
+      // Reverse credit card charge
+      if (entry.paymentMethod.startsWith('debt_')) {
+        const debtId = entry.paymentMethod.replace('debt_', '');
+        const debtAccount = get().debtAccounts.find(a => a.id === debtId);
+        if (debtAccount) {
+          const newBalance = debtAccount.currentBalance - entry.amount;
+          await supabase.from('debt_accounts').update({ current_balance: newBalance }).eq('id', debtId);
+          set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === debtId ? { ...a, currentBalance: newBalance } : a) }));
+        }
+      }
+    }
   },
 
   // Snapshots
@@ -442,13 +468,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     // Gather all items that are due (paymentDay <= today) and have a linked debt account
-    const items: { sourceType: string; sourceId: string; amount: number; currency: string; linkedAccountId: string }[] = [];
+    const items: { sourceType: string; sourceId: string; name: string; amount: number; currency: string; linkedAccountId: string }[] = [];
 
     for (const exp of fixedExpenses) {
       if (exp.paymentMode === 'auto' && exp.paymentDay <= today && exp.linkedAccountId) {
         const linkedAccount = debtAccounts.find(a => a.id === exp.linkedAccountId);
         if (linkedAccount) {
-          items.push({ sourceType: 'expense', sourceId: exp.id, amount: exp.amount, currency: exp.currency, linkedAccountId: exp.linkedAccountId });
+          items.push({ sourceType: 'expense', sourceId: exp.id, name: exp.name, amount: exp.amount, currency: exp.currency, linkedAccountId: exp.linkedAccountId });
         }
       }
     }
@@ -459,7 +485,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       if (sub.billingCycle === 'annual' && sub.renewalMonth !== currentMonthNum) continue;
       const linkedAccount = debtAccounts.find(a => a.id === sub.linkedAccountId);
       if (linkedAccount) {
-        items.push({ sourceType: 'subscription', sourceId: sub.id, amount: sub.amount, currency: sub.currency, linkedAccountId: sub.linkedAccountId });
+        items.push({ sourceType: 'subscription', sourceId: sub.id, name: sub.name, amount: sub.amount, currency: sub.currency, linkedAccountId: sub.linkedAccountId });
       }
     }
 
@@ -490,6 +516,22 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       const newBalance = debtAccount.currentBalance + chargeAmount;
       await supabase.from('debt_accounts').update({ current_balance: newBalance }).eq('id', debtAccount.id);
       set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === debtAccount.id ? { ...a, currentBalance: newBalance } : a) }));
+
+      // Create a spending entry for this auto-charge
+      const spendingDate = `${currentMonth}-${String(Math.min(today, 28)).padStart(2, '0')}`;
+      const { data: spendingData } = await supabase.from('spending').insert({
+        user_id: userId, date: spendingDate,
+        description: `${item.name} (auto)`,
+        amount: Math.round(chargeAmount),
+        category: item.sourceType === 'subscription' ? 'other' : 'other',
+        payment_method: `debt_${debtAccount.id}`,
+        linked_account_id: null,
+        linked_budget_id: null,
+        tags: [item.sourceType === 'subscription' ? 'subscription' : 'fixed-expense', 'auto-charge'],
+      }).select().single();
+      if (spendingData) {
+        set(s => ({ spending: [mapSpending(spendingData), ...s.spending] }));
+      }
 
       // Record as processed
       await supabase.from('processed_payments').insert({

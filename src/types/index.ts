@@ -74,6 +74,7 @@ export interface SpendingEntry {
   paymentMethod: 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa' | `checking_${string}` | `debt_${string}`;
   linkedAccountId: string | null;
   linkedBudgetId: string | null;
+  tags: string[];
 }
 
 export interface MonthlySnapshot {
