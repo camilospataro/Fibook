@@ -401,6 +401,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const amountInDestCurrency = dest.currency === 'COP' ? settings.savingsTarget
       : settings.savingsTarget / exchangeRate;
     const newSourceBalance = source.currentBalance - amountInSourceCurrency;
+    if (newSourceBalance < 0) throw new Error('Insufficient balance in source account');
     const newDestBalance = dest.currentBalance + amountInDestCurrency;
     await supabase.from('savings_accounts').update({ current_balance: newSourceBalance }).eq('id', source.id);
     await supabase.from('savings_accounts').update({ current_balance: newDestBalance }).eq('id', dest.id);
@@ -565,6 +566,13 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Spending
   addSpending: async (entry) => {
+    // Check checking account has sufficient balance before proceeding
+    if (entry.linkedAccountId) {
+      const account = get().checkingAccounts.find(a => a.id === entry.linkedAccountId);
+      if (account && account.currentBalance < entry.amount) {
+        throw new Error('Insufficient balance in checking account');
+      }
+    }
     get()._pushUndo();
     const { userId } = get();
     if (!userId) return;
@@ -622,6 +630,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       const newPaymentMethod = updates.paymentMethod ?? oldEntry.paymentMethod;
 
       // Reverse old checking deduction, apply new one
+      // Pre-check: compute what the new account balance would be after reversal + new deduction
+      if (newLinkedAccount) {
+        const acct = get().checkingAccounts.find(a => a.id === newLinkedAccount);
+        if (acct) {
+          let effectiveBalance = acct.currentBalance;
+          // If same account, the old amount will be restored first
+          if (oldEntry.linkedAccountId === newLinkedAccount) effectiveBalance += oldEntry.amount;
+          if (effectiveBalance < newAmount) throw new Error('Insufficient balance in checking account');
+        }
+      }
+
       if (oldEntry.linkedAccountId) {
         const oldAcct = get().checkingAccounts.find(a => a.id === oldEntry.linkedAccountId);
         if (oldAcct) {

@@ -51,34 +51,49 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
     setTagInput('');
   }
 
+  // Compute available balance for selected checking account
+  const selectedCheckingAccount = payFromId.startsWith('checking_')
+    ? checkingAccounts.find(a => a.id === payFromId.replace('checking_', ''))
+    : null;
+  const availableBalance = selectedCheckingAccount?.currentBalance ?? null;
+  const exceedsBalance = availableBalance !== null && Number(amount) > availableBalance;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!description || !amount) return;
+    if (exceedsBalance) {
+      toast.error('Amount exceeds available balance');
+      return;
+    }
     setSaving(true);
     const isChecking = payFromId.startsWith('checking_');
     const isDebt = payFromId.startsWith('debt_');
     const accountId = isChecking ? payFromId.replace('checking_', '') : isDebt ? payFromId.replace('debt_', '') : null;
-    await addSpending({
-      date,
-      description,
-      amount: Number(amount),
-      category,
-      paymentMethod: payFromId === 'none' ? 'cash' : payFromId as `checking_${string}` | `debt_${string}`,
-      linkedAccountId: isChecking ? accountId : null,
-      linkedBudgetId,
-      tags,
-    });
-    toast.success('Spending added');
-    setDescription('');
-    setAmount('');
-    setCategory('other');
-    setPayFromId('none');
-    setLinkedBudgetId(null);
-    setTags([]);
-    setTagInput('');
-    setDate(getToday());
+    try {
+      await addSpending({
+        date,
+        description,
+        amount: Number(amount),
+        category,
+        paymentMethod: payFromId === 'none' ? 'cash' : payFromId as `checking_${string}` | `debt_${string}`,
+        linkedAccountId: isChecking ? accountId : null,
+        linkedBudgetId,
+        tags,
+      });
+      toast.success('Spending added');
+      setDescription('');
+      setAmount('');
+      setCategory('other');
+      setPayFromId('none');
+      setLinkedBudgetId(null);
+      setTags([]);
+      setTagInput('');
+      setDate(getToday());
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add spending');
+    }
     setSaving(false);
-    onOpenChange(false);
   }
 
   return (
@@ -98,7 +113,12 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
           </div>
           <div className="space-y-2">
             <Label>Amount (COP)</Label>
-            <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" min="0" className="bg-secondary border-border" required />
+            <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" min="0" className={`bg-secondary border-border ${exceedsBalance ? 'border-destructive' : ''}`} required />
+            {availableBalance !== null && (
+              <p className={`text-[11px] ${exceedsBalance ? 'text-destructive' : 'text-muted-foreground'}`}>
+                Available: {formatCurrency(availableBalance, selectedCheckingAccount!.currency)}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Category</Label>
@@ -171,7 +191,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
               className="bg-secondary border-border"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={saving}>
+          <Button type="submit" className="w-full" disabled={saving || exceedsBalance}>
             {saving ? 'Saving...' : 'Add Spending'}
           </Button>
         </form>

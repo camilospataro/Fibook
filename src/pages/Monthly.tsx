@@ -570,7 +570,7 @@ export default function Monthly() {
                         Transfer {formatCOP(Number(savingsAmount) || 0)} now
                       </Button>
                     : <div className="flex gap-2">
-                        <Button size="sm" variant="destructive" className="flex-1 text-xs" onClick={async () => { setConfirmTransfer(false); await executeSavingsTransfer(); toast.success('Savings transferred'); }}>
+                        <Button size="sm" variant="destructive" className="flex-1 text-xs" onClick={async () => { setConfirmTransfer(false); try { await executeSavingsTransfer(); toast.success('Savings transferred'); } catch (err) { toast.error(err instanceof Error ? err.message : 'Transfer failed'); } }}>
                           Confirm
                         </Button>
                         <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => setConfirmTransfer(false)}>
