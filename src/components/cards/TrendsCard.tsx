@@ -4,6 +4,7 @@ import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatMonthLabel } from '@/lib/formatters';
 import {
   totalMonthlyIncome, totalFixedExpenses, totalSubscriptionsCOP,
+  newChargesPerDebtAccount,
 } from '@/lib/calculations';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Cell } from 'recharts';
 
@@ -76,10 +77,13 @@ export default function TrendsCard() {
       : currentMonthKey;
 
     // Generate projected future months (up to 6 months ahead)
-    // Simulate per-account debt payoff — when balance hits 0, payment is freed
+    // Simulate per-account debt payoff with recurring charges added each month
+    const recurringCharges = newChargesPerDebtAccount(debtAccounts, subscriptions, fixedExpenses, exchangeRate);
     const accountState = debtAccounts.map(acc => ({
+      id: acc.id,
       balance: toCOP(acc.currentBalance, acc.currency, exchangeRate),
       payment: toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate),
+      monthlyNewCharges: recurringCharges.get(acc.id) ?? 0,
     }));
 
     const projectedMonths: typeof historical = [];
@@ -89,6 +93,11 @@ export default function TrendsCard() {
     for (let i = 1; i <= 6; i++) {
       const d = new Date(startDate.getFullYear(), startDate.getMonth() + i);
       const label = d.toLocaleDateString('en-US', { month: 'short' }).slice(0, 3);
+
+      // Add new charges from subscriptions/expenses linked to each debt account
+      for (const acc of accountState) {
+        acc.balance += acc.monthlyNewCharges;
+      }
 
       // Simulate debt payments for this month
       let monthDebtPayments = 0;

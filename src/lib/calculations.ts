@@ -77,6 +77,44 @@ export function totalMonthlyExpenses(
   );
 }
 
+/**
+ * Compute monthly recurring charges per debt account (from subscriptions + auto fixed expenses).
+ * Returns a Map of debtAccountId → monthly COP charge amount.
+ * For annual subs, spreads across 12 months (or pass calendarMonth 1-12 for exact).
+ */
+export function newChargesPerDebtAccount(
+  debtAccounts: DebtAccount[],
+  subscriptions: Subscription[],
+  fixedExpenses: FixedExpense[],
+  exchangeRate: number,
+  calendarMonth?: number,
+): Map<string, number> {
+  const debtIds = new Set(debtAccounts.map(a => a.id));
+  const charges = new Map<string, number>();
+
+  for (const sub of subscriptions) {
+    if (!sub.active || !sub.linkedAccountId || !debtIds.has(sub.linkedAccountId)) continue;
+    const cost = sub.currency === 'USD' ? sub.amount * exchangeRate : sub.amount;
+    if (sub.billingCycle === 'annual') {
+      if (calendarMonth != null) {
+        if (sub.renewalMonth !== calendarMonth) continue;
+      } else {
+        charges.set(sub.linkedAccountId, (charges.get(sub.linkedAccountId) ?? 0) + cost / 12);
+        continue;
+      }
+    }
+    charges.set(sub.linkedAccountId, (charges.get(sub.linkedAccountId) ?? 0) + cost);
+  }
+
+  for (const exp of fixedExpenses) {
+    if (exp.paymentMode !== 'auto' || !exp.linkedAccountId || !debtIds.has(exp.linkedAccountId)) continue;
+    const cost = exp.currency === 'USD' ? exp.amount * exchangeRate : exp.amount;
+    charges.set(exp.linkedAccountId, (charges.get(exp.linkedAccountId) ?? 0) + cost);
+  }
+
+  return charges;
+}
+
 export function monthlyBalance(income: number, expenses: number): number {
   return income - expenses;
 }
