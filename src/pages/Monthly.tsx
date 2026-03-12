@@ -136,6 +136,7 @@ export default function Monthly() {
 
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
 
   // Recap
   const [showRecap, setShowRecap] = useState(false);
@@ -564,9 +565,18 @@ export default function Monthly() {
                   <Input type="number" min={1} max={28} defaultValue={savingsTransferDay} onBlur={e => { const d = Math.max(1, Math.min(28, Number(e.target.value) || 1)); updateSavingsAccounts(savingsSourceId, savingsDestId, d); }} className="h-7 text-xs bg-secondary border-border w-full" />
                 </div>
                 {monthMode === 'current' && savingsSourceId && savingsDestId && (Number(savingsAmount) || 0) > 0 && (
-                  <Button size="sm" variant="secondary" className="w-full text-xs" onClick={async () => { await executeSavingsTransfer(); toast.success('Savings transferred'); }}>
-                    Transfer {formatCOP(Number(savingsAmount) || 0)} now
-                  </Button>
+                  !confirmTransfer
+                    ? <Button size="sm" variant="secondary" className="w-full text-xs" onClick={() => setConfirmTransfer(true)}>
+                        Transfer {formatCOP(Number(savingsAmount) || 0)} now
+                      </Button>
+                    : <div className="flex gap-2">
+                        <Button size="sm" variant="destructive" className="flex-1 text-xs" onClick={async () => { setConfirmTransfer(false); await executeSavingsTransfer(); toast.success('Savings transferred'); }}>
+                          Confirm
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => setConfirmTransfer(false)}>
+                          Cancel
+                        </Button>
+                      </div>
                 )}
               </div>
             )}
