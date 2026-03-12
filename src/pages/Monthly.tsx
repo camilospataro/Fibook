@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, PiggyBank, Sparkles, Landmark } from 'lucide-react';
+import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, PiggyBank, Sparkles, Landmark, ShoppingBag } from 'lucide-react';
 import AiUpdateSheet from '@/components/modals/AiUpdateSheet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/store/useFinanceStore';
-import { formatCOP, formatCurrency, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
+import { formatCOP, formatCurrency, formatDate, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
 import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP, totalDebtPaymentsCOP } from '@/lib/calculations';
 import { toast } from 'sonner';
 import type { ExpenseCategory } from '@/types';
@@ -23,6 +23,10 @@ const expenseCategories: { value: ExpenseCategory; label: string }[] = [
   { value: 'transport', label: 'Transport' }, { value: 'entertainment', label: 'Entertainment' },
   { value: 'health', label: 'Health' }, { value: 'other', label: 'Other' },
 ];
+const categoryLabels: Record<string, string> = {
+  groceries: 'Groceries', transport: 'Transport', food: 'Food & Dining',
+  entertainment: 'Entertainment', health: 'Health', shopping: 'Shopping', other: 'Other',
+};
 
 export default function Monthly() {
   const store = useFinanceStore();
@@ -49,7 +53,7 @@ export default function Monthly() {
 
   // Collapsible sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    expenses: true, subscriptions: true, debt: true, checking: true, income: true, debtPayments: true,
+    expenses: true, subscriptions: true, debt: true, checking: true, income: true, debtPayments: true, spending: true,
   });
   const toggle = (key: string) => setOpenSections(p => ({ ...p, [key]: !p[key] }));
 
@@ -594,6 +598,32 @@ export default function Monthly() {
                 </div>
                 <span className="text-sm font-medium shrink-0">{formatCurrency(acc.monthlyPayment || 0, acc.currency)}</span>
               </ItemRow>
+            ))}
+          </SectionCard>
+
+          {/* Monthly Spending Transactions */}
+          <SectionCard
+            icon={ShoppingBag}
+            title="Spending"
+            subtitle={formatCOP(totalSpending)}
+            subtitleColor="text-destructive"
+            open={openSections.spending}
+            onToggle={() => toggle('spending')}
+          >
+            {monthlySpending.length === 0 && <EmptyState text="No spending this month" />}
+            {monthlySpending.map(entry => (
+              <div key={entry.id} className="border-b border-border/50 last:border-0 py-2">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{entry.description}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] text-muted-foreground">{formatDate(entry.date)}</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{categoryLabels[entry.category] ?? entry.category}</Badge>
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium text-destructive shrink-0 ml-2">-{formatCOP(entry.amount)}</span>
+                </div>
+              </div>
             ))}
           </SectionCard>
 
