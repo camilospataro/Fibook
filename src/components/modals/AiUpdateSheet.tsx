@@ -188,13 +188,12 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
     }));
 
     try {
-      // Refresh the session to ensure a valid JWT, then fetch directly
-      const { data: { session } } = await supabase.auth.refreshSession();
+      // JWT verification is disabled on this function; use anon key
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ message: message.trim(), currentData, files: fileAttachments }),
