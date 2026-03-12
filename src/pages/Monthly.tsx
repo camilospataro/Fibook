@@ -449,6 +449,7 @@ export default function Monthly() {
             icon={Receipt}
             title="Fixed Expenses"
             subtitle={formatCOP(fixed)}
+            subtitleColor="text-destructive"
             open={openSections.expenses}
             onToggle={() => toggle('expenses')}
             editing={isEditing('expenses')}
@@ -497,6 +498,7 @@ export default function Monthly() {
             icon={Repeat}
             title="Subscriptions"
             subtitle={formatCOP(subsCost)}
+            subtitleColor="text-destructive"
             open={openSections.subscriptions}
             onToggle={() => toggle('subscriptions')}
             editing={isEditing('subscriptions')}
