@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatCurrency, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
-import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP } from '@/lib/calculations';
+import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP, totalDebtPaymentsCOP } from '@/lib/calculations';
 import { toast } from 'sonner';
 import type { ExpenseCategory } from '@/types';
 

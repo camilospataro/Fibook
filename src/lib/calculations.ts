@@ -44,6 +44,13 @@ export function totalMinimumPaymentsCOP(accounts: DebtAccount[], exchangeRate: n
   }, 0);
 }
 
+export function totalDebtPaymentsCOP(accounts: DebtAccount[], exchangeRate: number): number {
+  return accounts.reduce((sum, acc) => {
+    const payment = acc.currency === 'USD' ? (acc.monthlyPayment || 0) * exchangeRate : (acc.monthlyPayment || 0);
+    return sum + payment;
+  }, 0);
+}
+
 export function totalMonthlyExpenses(
   fixedExpenses: FixedExpense[],
   accounts: DebtAccount[],
@@ -52,7 +59,7 @@ export function totalMonthlyExpenses(
 ): number {
   return (
     totalFixedExpenses(fixedExpenses, exchangeRate) +
-    totalMinimumPaymentsCOP(accounts, exchangeRate) +
+    totalDebtPaymentsCOP(accounts, exchangeRate) +
     totalSubscriptionsCOP(subs, exchangeRate)
   );
 }
