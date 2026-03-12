@@ -1,7 +1,5 @@
 import { DollarSign, TrendingDown, CreditCard, PiggyBank, Landmark } from 'lucide-react';
 import KpiCard from '@/components/cards/KpiCard';
-import CheckingAccountsCard from '@/components/cards/CheckingAccountsCard';
-import SavingsAccountCard from '@/components/cards/SavingsAccountCard';
 import DebtPayoffChart from '@/components/charts/DebtPayoffChart';
 import SavingsProjectionChart from '@/components/charts/SavingsProjectionChart';
 import MonthlySpending from '@/components/cards/MonthlySpending';
@@ -20,30 +18,32 @@ export default function Dashboard() {
   const incomeSources = useFinanceStore(s => s.incomeSources);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
   const subs = useFinanceStore(s => s.subscriptions);
-  const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
+  const settings = useFinanceStore(s => s.settings);
+  const exchangeRate = settings?.exchangeRate ?? 4000;
+  const savingsDestId = settings?.savingsDestAccountId ?? null;
 
   const debt = totalDebtCOP(accounts, exchangeRate);
-  const checking = totalCheckingCOP(checkingAccounts, exchangeRate);
+  // Checking total excludes savings destination account
+  const checkingOnly = checkingAccounts.filter(a => a.id !== savingsDestId);
+  const checking = totalCheckingCOP(checkingOnly, exchangeRate);
+  // Savings account balance in COP
+  const savingsAccount = savingsDestId ? checkingAccounts.find(a => a.id === savingsDestId) : null;
+  const savingsBalance = savingsAccount
+    ? (savingsAccount.currency === 'USD' ? savingsAccount.currentBalance * exchangeRate : savingsAccount.currentBalance)
+    : 0;
   const income = totalMonthlyIncome(incomeSources, exchangeRate);
   const expenses = totalMonthlyExpenses(fixedExpenses, accounts, subs, exchangeRate);
-  const balance = income - expenses;
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Dashboard</h1>
 
-      {/* Checking & Savings Accounts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <CheckingAccountsCard />
-        <SavingsAccountCard />
-      </div>
-
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <KpiCard title="Checking" value={checking} prefix="$" suffix=" COP" icon={Landmark} color="#00D4AA" separator="." />
+        <KpiCard title="Savings" value={savingsBalance} prefix="$" suffix=" COP" icon={PiggyBank} color="#00D4AA" separator="." />
         <KpiCard title="Monthly Income" value={income} prefix="$" suffix=" COP" icon={DollarSign} color="#00D4AA" separator="." />
         <KpiCard title="Monthly Expenses" value={expenses} prefix="$" suffix=" COP" icon={TrendingDown} color="#FBBF24" separator="." />
         <KpiCard title="Total Debt" value={debt} prefix="$" suffix=" COP" icon={CreditCard} color="#FF6B6B" separator="." />
-        <KpiCard title="Checking" value={checking} prefix="$" suffix=" COP" icon={Landmark} color="#00D4AA" separator="." />
-        <KpiCard title="Monthly Balance" value={balance} prefix="$" suffix=" COP" icon={PiggyBank} color={balance >= 0 ? '#00D4AA' : '#FF6B6B'} separator="." />
       </div>
 
       {/* Monthly Spending */}
