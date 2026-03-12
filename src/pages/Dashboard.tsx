@@ -1,5 +1,7 @@
 import { DollarSign, TrendingDown, CreditCard, PiggyBank, Landmark } from 'lucide-react';
 import KpiCard from '@/components/cards/KpiCard';
+import CheckingAccountsCard from '@/components/cards/CheckingAccountsCard';
+import SavingsAccountCard from '@/components/cards/SavingsAccountCard';
 import DebtPayoffChart from '@/components/charts/DebtPayoffChart';
 import SavingsProjectionChart from '@/components/charts/SavingsProjectionChart';
 import MonthlySpending from '@/components/cards/MonthlySpending';
@@ -28,6 +30,12 @@ export default function Dashboard() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Dashboard</h1>
+
+      {/* Checking & Savings Accounts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <CheckingAccountsCard />
+        <SavingsAccountCard />
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
