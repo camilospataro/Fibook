@@ -61,6 +61,7 @@ export interface Subscription {
   linkedAccountId: string | null;
   paymentDay: number;
   billingCycle: 'monthly' | 'annual';
+  renewalMonth: number | null; // 1-12 for annual subs, null for monthly
 }
 
 export interface SpendingEntry {

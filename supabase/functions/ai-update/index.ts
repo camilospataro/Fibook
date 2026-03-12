@@ -71,7 +71,7 @@ Return a JSON object with this exact structure:
     },
     {
       "type": "addSubscription",
-      "data": { "name": "<string>", "amount": <number>, "currency": "<COP|USD>", "group": "<string>", "active": true, "billingCycle": "<monthly|annual>", "paymentDay": <1-31>, "linkedAccountId": "<account id or null>" }
+      "data": { "name": "<string>", "amount": <number>, "currency": "<COP|USD>", "group": "<string>", "active": true, "billingCycle": "<monthly|annual>", "paymentDay": <1-31>, "renewalMonth": <1-12 or null>, "linkedAccountId": "<account id or null>" }
     },
     {
       "type": "addSpending",
@@ -92,6 +92,7 @@ Rules:
 - If the user mentions cash on hand, update the snapshot's "cashOnHand" field
 - If the user wants to add NEW subscriptions (not update existing ones), use "addSubscription" with a data object. Use "updateSubscription" only for existing subscriptions matched by ID
 - For new subscriptions, infer the group from context (e.g. "Domains", "Streaming", "Software", "General") and default billingCycle to "monthly" unless specified as annual/yearly
+- For annual subscriptions, set renewalMonth (1-12) based on the renewal/expiry date if available in the data. If a date like "2025-01-21" is given, renewalMonth=1 and paymentDay=21
 - Only include actions you're confident about. If something is ambiguous, mention it in the summary
 - Return ONLY valid JSON, no markdown, no code fences, no extra text
 - For spending entries, infer the category and default payment method to "debit" unless specified

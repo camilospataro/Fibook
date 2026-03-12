@@ -14,12 +14,24 @@ export function totalCheckingCOP(accounts: CheckingAccount[], exchangeRate: numb
   }, 0);
 }
 
-export function totalSubscriptionsCOP(subs: Subscription[], exchangeRate: number): number {
+/**
+ * Total monthly subscriptions in COP.
+ * If `month` is provided (1-12), annual subs only count in their renewal month (full amount).
+ * If `month` is omitted, annual subs are spread across 12 months (cost/12).
+ */
+export function totalSubscriptionsCOP(subs: Subscription[], exchangeRate: number, month?: number): number {
   return subs
     .filter(s => s.active)
     .reduce((sum, s) => {
       const cost = s.currency === 'USD' ? s.amount * exchangeRate : s.amount;
-      return sum + (s.billingCycle === 'annual' ? cost / 12 : cost);
+      if (s.billingCycle === 'annual') {
+        if (month != null) {
+          // Only charge in the renewal month
+          return sum + (s.renewalMonth === month ? cost : 0);
+        }
+        return sum + cost / 12; // spread evenly when no month specified
+      }
+      return sum + cost;
     }, 0);
 }
 
