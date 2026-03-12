@@ -90,10 +90,18 @@ export default function Spending() {
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold font-[family-name:var(--font-display)]">Spending</h1>
-        <Button size="sm" onClick={() => setSheetOpen(true)}>
+        <Button size="sm" onClick={() => setSheetOpen(true)} className="hidden md:inline-flex">
           <Plus className="w-4 h-4 mr-1" /> Add Spending
         </Button>
       </div>
+
+      {/* Mobile FAB */}
+      <button
+        onClick={() => setSheetOpen(true)}
+        className="md:hidden fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-xl flex items-center justify-center active:scale-95 transition-transform"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
 
       {/* Filters */}
       <div className="flex gap-2 items-center overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap scrollbar-none">
