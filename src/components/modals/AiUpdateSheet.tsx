@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { supabase } from '@/lib/supabase';
 import { getCurrentMonth, getToday, formatCOP } from '@/lib/formatters';
-import { Send, Loader2, Check, AlertCircle } from 'lucide-react';
+import { Send, Loader2, Check, AlertCircle, Paperclip, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Action {
@@ -23,9 +23,38 @@ interface AiResponse {
   error?: string;
 }
 
+interface AttachedFile {
+  name: string;
+  type: string;
+  content: string;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+/** Read a file as text. For images/PDFs, read as base64 data URL. */
+async function readFileContent(file: File): Promise<string> {
+  // Text-based files: read as text
+  const textTypes = [
+    'text/', 'application/json', 'application/csv',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats',
+  ];
+  const isText = textTypes.some(t => file.type.startsWith(t))
+    || /\.(csv|tsv|txt|json|xml|md)$/i.test(file.name);
+
+  if (isText || !file.type) {
+    return file.text();
+  }
+
+  // Binary files (images, PDFs): read as base64
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function AiUpdateSheet({ open, onOpenChange }: Props) {
@@ -34,7 +63,9 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
   const [response, setResponse] = useState<AiResponse | null>(null);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const debtAccounts = useFinanceStore(s => s.debtAccounts);
   const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
@@ -61,11 +92,40 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
       setMessage('');
       setResponse(null);
       setError(null);
+      setAttachedFiles([]);
     }
   }, [open]);
 
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      // Limit file size to 500KB for text, 2MB for images
+      const maxSize = file.type.startsWith('image/') ? 2 * 1024 * 1024 : 500 * 1024;
+      if (file.size > maxSize) {
+        toast.error(`${file.name} is too large (max ${file.type.startsWith('image/') ? '2MB' : '500KB'})`);
+        continue;
+      }
+
+      try {
+        const content = await readFileContent(file);
+        setAttachedFiles(prev => [...prev, { name: file.name, type: file.type, content }]);
+      } catch {
+        toast.error(`Failed to read ${file.name}`);
+      }
+    }
+
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+  }
+
+  function removeFile(index: number) {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSend() {
-    if (!message.trim() || loading) return;
+    if ((!message.trim() && attachedFiles.length === 0) || loading) return;
     setLoading(true);
     setError(null);
     setResponse(null);
@@ -120,9 +180,16 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
       savingsTarget: settings?.savingsTarget ?? 0,
     };
 
+    // Build file attachments payload
+    const fileAttachments = attachedFiles.map(f => ({
+      name: f.name,
+      type: f.type,
+      content: f.content,
+    }));
+
     try {
       const { data, error: fnError } = await supabase.functions.invoke('ai-update', {
-        body: { message: message.trim(), currentData },
+        body: { message: message.trim(), currentData, files: fileAttachments },
       });
 
       if (fnError) {
@@ -288,13 +355,16 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
           {/* Input area */}
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Tell me what changed and I'll update your data.
+              Tell me what changed or attach a file (bank statement, CSV, screenshot) and I'll update your data.
             </p>
             <Textarea
               ref={textareaRef}
               value={message}
               onChange={e => setMessage(e.target.value)}
-              placeholder="e.g. I now have 2 million in savings, paid 500k off the Visa debt, and spent 45k on groceries today"
+              placeholder={attachedFiles.length > 0
+                ? "e.g. Update my balances from this bank statement"
+                : "e.g. I now have 2 million in savings, paid 500k off the Visa debt"
+              }
               className="bg-secondary border-border min-h-[100px] resize-none"
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -303,17 +373,60 @@ export default function AiUpdateSheet({ open, onOpenChange }: Props) {
                 }
               }}
             />
-            <Button
-              onClick={handleSend}
-              disabled={!message.trim() || loading}
-              className="w-full"
-            >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-              ) : (
-                <><Send className="w-4 h-4 mr-2" /> Send</>
-              )}
-            </Button>
+
+            {/* Attached files */}
+            {attachedFiles.length > 0 && (
+              <div className="space-y-1.5">
+                {attachedFiles.map((file, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/70 text-sm"
+                  >
+                    <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="truncate flex-1 text-foreground">{file.name}</span>
+                    <button
+                      onClick={() => removeFile(i)}
+                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-1.5"
+                disabled={loading}
+              >
+                <Paperclip className="w-4 h-4" />
+                Attach File
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".csv,.tsv,.txt,.json,.xml,.md,.pdf,image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <Button
+                onClick={handleSend}
+                disabled={(!message.trim() && attachedFiles.length === 0) || loading}
+                className="flex-1"
+              >
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+                ) : (
+                  <><Send className="w-4 h-4 mr-2" /> Send</>
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* Error */}
