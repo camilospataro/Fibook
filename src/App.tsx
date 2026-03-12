@@ -34,8 +34,8 @@ function App() {
                 <AppLayout>
                   <Suspense fallback={<PageLoader />}>
                     <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="/spending" element={<Spending />} />
+                      <Route path="/" element={<Spending />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
                       <Route path="/monthly" element={<Monthly />} />
                       <Route path="/projections" element={<Projections />} />
                       <Route path="/settings" element={<Settings />} />

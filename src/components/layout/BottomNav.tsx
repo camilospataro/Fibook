@@ -2,8 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Wallet, CalendarCheck, Settings } from 'lucide-react';
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Home' },
-  { to: '/spending', icon: Wallet, label: 'Spending' },
+  { to: '/', icon: Wallet, label: 'Spending' },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/monthly', icon: CalendarCheck, label: 'Monthly' },
   // { to: '/simulation', icon: Play, label: 'Simulate' }, // hidden for now
   { to: '/settings', icon: Settings, label: 'Settings' },

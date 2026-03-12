@@ -5,8 +5,8 @@ import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatMonthLabel, getCurrentMonth } from '@/lib/formatters';
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/spending', icon: Wallet, label: 'Spending' },
+  { to: '/', icon: Wallet, label: 'Spending' },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/monthly', icon: CalendarCheck, label: 'Monthly' },
   // { to: '/simulation', icon: Play, label: 'Simulation' }, // hidden for now
   { to: '/projections', icon: TrendingUp, label: 'Projections' },
