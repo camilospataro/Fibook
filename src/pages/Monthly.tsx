@@ -327,7 +327,11 @@ export default function Monthly() {
   // Recurring charges on debt are already counted in fixed + subsCost, so only add the principal portion
   const totalRecurringOnDebt = [...recurringCharges.values()].reduce((s, v) => s + v, 0);
   const principalPaydown = Math.max(0, debtPaid - totalRecurringOnDebt);
-  const totalExpenses = fixed + subsCost + principalPaydown + totalSpending;
+  // Current month: actual spending replaces fixed expenses (spending IS the budget actuals)
+  // Future/past months: fixed expenses serve as the budget projection (no spending data)
+  const totalExpenses = monthMode === 'current'
+    ? subsCost + principalPaydown + totalSpending
+    : fixed + subsCost + principalPaydown;
   const savingsVal = Number(savingsAmount) || 0;
   const balance = totalIncome - totalExpenses - savingsVal;
   const totalChecking = checkingAccounts.reduce((sum, acc) => {
@@ -869,9 +873,11 @@ export default function Monthly() {
             </CardHeader>
             <CardContent className="space-y-2">
               <SummaryRow label="Total Income" value={formatCOP(totalIncome)} color="text-income" />
-              <SummaryRow label="Fixed Expenses" value={formatCOP(fixed)} />
+              {monthMode === 'current'
+                ? <SummaryRow label="Spending" value={formatCOP(totalSpending)} />
+                : <SummaryRow label="Fixed Expenses (Budget)" value={formatCOP(fixed)} />
+              }
               <SummaryRow label="Subscriptions" value={formatCOP(subsCost)} />
-              <SummaryRow label="Variable Spending" value={formatCOP(totalSpending)} />
               <SummaryRow label="Debt Paydown" value={formatCOP(principalPaydown)} />
               <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
               <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />

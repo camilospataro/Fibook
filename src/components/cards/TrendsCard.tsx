@@ -27,7 +27,6 @@ export default function TrendsCard() {
   const incomeSources = useFinanceStore(s => s.incomeSources);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
   const subscriptions = useFinanceStore(s => s.subscriptions);
-  const spending = useFinanceStore(s => s.spending);
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
   const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
   const [metric, setMetric] = useState<Metric>('income-vs-expenses');
@@ -35,19 +34,6 @@ export default function TrendsCard() {
   const sortedSnapshots = useMemo(() =>
     [...snapshots].sort((a, b) => a.month.localeCompare(b.month)).slice(-12),
   [snapshots]);
-
-  // Average monthly discretionary spending (last 90 days, excluding auto-charges)
-  const avgSpending = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    const recent = spending.filter(e => e.date >= cutoffStr && !(e.tags ?? []).includes('auto-charge'));
-    if (recent.length === 0) return 0;
-    const total = recent.reduce((s, e) => s + e.amount, 0);
-    // Count distinct months with data for accurate averaging
-    const months = new Set(recent.map(e => e.date.slice(0, 7)));
-    return total / Math.max(1, months.size);
-  }, [spending]);
 
   const chartData = useMemo(() => {
     const income = totalMonthlyIncome(incomeSources, exchangeRate);
@@ -115,7 +101,8 @@ export default function TrendsCard() {
       // Debt payments include paying off recurring charges (already in fixedExp+subsCost)
       // plus paying down old principal. Only add the principal paydown to avoid double-counting.
       const principalPaydown = Math.max(0, monthDebtPayments - totalRecurringOnDebt);
-      const projExpenses = fixedExp + subsCost + principalPaydown + avgSpending;
+      // Fixed expenses serve as the budget for projected months (no avgSpending — it overlaps)
+      const projExpenses = fixedExp + subsCost + principalPaydown;
       const projBalance = income - projExpenses;
       const projSavings = Math.max(0, projBalance - savingsTarget) + savingsTarget;
 
@@ -134,7 +121,7 @@ export default function TrendsCard() {
     const maxHistorical = Math.max(0, 12 - projectedMonths.length);
     const trimmedHistorical = historical.slice(-maxHistorical);
     return [...trimmedHistorical, ...projectedMonths];
-  }, [sortedSnapshots, debtAccounts, incomeSources, fixedExpenses, subscriptions, exchangeRate, avgSpending, savingsTarget]);
+  }, [sortedSnapshots, debtAccounts, incomeSources, fixedExpenses, subscriptions, exchangeRate, savingsTarget]);
 
   // Month-over-month deltas (from snapshots only)
   const deltas = useMemo(() => {

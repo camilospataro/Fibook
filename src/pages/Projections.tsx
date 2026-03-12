@@ -124,7 +124,7 @@ export default function Projections() {
   const incomeSources = useFinanceStore(s => s.incomeSources);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
   const subscriptions = useFinanceStore(s => s.subscriptions);
-  const spending = useFinanceStore(s => s.spending);
+
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
   const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
 
@@ -136,18 +136,6 @@ export default function Projections() {
   const minPayments = totalMinimumPaymentsCOP(debtAccounts, exchangeRate);
   const debt = totalDebtCOP(debtAccounts, exchangeRate);
   const checking = totalCheckingCOP(checkingAccounts, exchangeRate);
-
-  // Average monthly discretionary spending (last 90 days, excluding auto-charges)
-  const avgSpending = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    const recent = spending.filter(e => e.date >= cutoffStr && !(e.tags ?? []).includes('auto-charge'));
-    if (recent.length === 0) return 0;
-    const total = recent.reduce((s, e) => s + e.amount, 0);
-    const months = new Set(recent.map(e => e.date.slice(0, 7)));
-    return total / Math.max(1, months.size);
-  }, [spending]);
 
   // ─── Recurring charges map (subs/expenses linked to debt accounts) ──
   const recurringCharges = useMemo(
@@ -162,7 +150,8 @@ export default function Projections() {
     [recurringCharges],
   );
   const principalPaydown = Math.max(0, debtPayments - totalRecurringOnDebt);
-  const totalOutflows = fixedExp + subsCost + principalPaydown + avgSpending + savingsTarget;
+  // Fixed expenses serve as the budget — no avgSpending (it overlaps with fixed expenses)
+  const totalOutflows = fixedExp + subsCost + principalPaydown + savingsTarget;
   const surplus = income - totalOutflows;
 
   // ─── Milestones ─────────────────────────────────────────
@@ -199,7 +188,7 @@ export default function Projections() {
         const charges = recurringCharges.get(a.id) ?? 0;
         return s + Math.max(0, payment - charges);
       }, 0);
-    const monthlyExp = fixedExp + subsCost + activeDebtPrincipal + avgSpending;
+    const monthlyExp = fixedExp + subsCost + activeDebtPrincipal;
     const emergencyMonths = monthlyExp > 0 ? checking / monthlyExp : Infinity;
 
     // Savings target: surplus increases as debts get paid off
@@ -211,7 +200,7 @@ export default function Projections() {
     const netWorth = checking - debt;
 
     return { debtFreeMonths, emergencyMonths, savingsMonths, netWorth };
-  }, [debtAccounts, exchangeRate, fixedExp, subsCost, avgSpending, checking, debt, surplus, savingsTarget, recurringCharges]);
+  }, [debtAccounts, exchangeRate, fixedExp, subsCost, checking, debt, surplus, savingsTarget, recurringCharges]);
 
   // ─── Cash flow waterfall ────────────────────────────────
   const waterfallData = useMemo(() => {
@@ -224,7 +213,6 @@ export default function Projections() {
       ['Fixed Exp.', fixedExp, '#FF6B6B'],
       ['Subscriptions', subsCost, '#FF6B6B'],
       ['Debt Paydown', principalPaydown, '#FBBF24'],
-      ['Avg. Spending', avgSpending, '#FF6B6B'],
       ['Savings', savingsTarget, '#4F8EF7'],
     ];
 
@@ -242,7 +230,7 @@ export default function Projections() {
       if (i === items.length - 1) return { name: item.name, base: 0, value: item.running, fill: item.running >= 0 ? '#00D4AA' : '#FF6B6B' };
       return { name: item.name, base: item.running, value: -item.amount, fill: (outflows[i - 1]?.[2] ?? '#FF6B6B') as string };
     });
-  }, [income, fixedExp, subsCost, principalPaydown, avgSpending, savingsTarget]);
+  }, [income, fixedExp, subsCost, principalPaydown, savingsTarget]);
 
   // ─── Per-account debt timelines ─────────────────────────
   const { debtChartData, accountMeta } = useMemo(() => {
@@ -285,9 +273,9 @@ export default function Projections() {
       newCharges: recurringCharges.get(acc.id) ?? 0,
     }));
 
-    // Base monthly surplus (income - fixed - subs - avg spending - savings target)
-    // Debt payments are handled separately so we can free them when paid off
-    const baseSurplus = income - fixedExp - subsCost - avgSpending - savingsTarget;
+    // Base monthly surplus (income - fixed - subs - savings target)
+    // Fixed expenses serve as the budget; debt payments handled separately
+    const baseSurplus = income - fixedExp - subsCost - savingsTarget;
     let chk = checking;
 
     for (let m = 0; m <= capped; m++) {
@@ -330,7 +318,7 @@ export default function Projections() {
       chk += Math.max(0, monthSurplus);
     }
     return data;
-  }, [checking, income, fixedExp, subsCost, avgSpending, savingsTarget, debtAccounts, exchangeRate, milestones.debtFreeMonths, recurringCharges]);
+  }, [checking, income, fixedExp, subsCost, savingsTarget, debtAccounts, exchangeRate, milestones.debtFreeMonths, recurringCharges]);
 
   // ─── Scenario comparison ────────────────────────────────
   const scenarios = useMemo(() => {
@@ -361,7 +349,7 @@ export default function Projections() {
 
     // 3. Aggressive (snowball) — only subtract principal portion of min payments
     const minPrincipal = Math.max(0, minPayments - totalNewCharges);
-    const surplusForSnowball = Math.max(0, income - fixedExp - subsCost - avgSpending - savingsTarget - minPrincipal);
+    const surplusForSnowball = Math.max(0, income - fixedExp - subsCost - savingsTarget - minPrincipal);
     const aggressiveTimeline = snowballPayoff(debtAccounts, surplusForSnowball, exchangeRate, recurringCharges);
     const aggressiveMonths = aggressiveTimeline.length > 0 ? aggressiveTimeline.length - 1 : Infinity;
 
@@ -379,7 +367,7 @@ export default function Projections() {
     }
 
     return { data, minMonths, currentMonths, aggressiveMonths };
-  }, [debt, debtAccounts, debtPayments, minPayments, income, fixedExp, subsCost, avgSpending, savingsTarget, exchangeRate, recurringCharges]);
+  }, [debt, debtAccounts, debtPayments, minPayments, income, fixedExp, subsCost, savingsTarget, exchangeRate, recurringCharges]);
 
   // ─── Render ─────────────────────────────────────────────
 
