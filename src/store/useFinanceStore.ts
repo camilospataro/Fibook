@@ -65,7 +65,7 @@ interface FinanceState {
   deleteSubscription: (id: string) => Promise<void>;
 
   // Spending
-  addSpending: (entry: Omit<SpendingEntry, 'id' | 'userId'>) => Promise<void>;
+  addSpending: (entry: Omit<SpendingEntry, 'id' | 'userId'>, depositToAccountId?: string) => Promise<void>;
   updateSpending: (id: string, updates: Partial<SpendingEntry>) => Promise<void>;
   deleteSpending: (id: string) => Promise<void>;
 
@@ -565,7 +565,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   // Spending
-  addSpending: async (entry) => {
+  addSpending: async (entry, depositToAccountId) => {
     // Check checking account has sufficient balance before proceeding
     if (entry.linkedAccountId) {
       const account = get().checkingAccounts.find(a => a.id === entry.linkedAccountId);
@@ -604,6 +604,15 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
           const newBalance = debtAccount.currentBalance + entry.amount;
           await supabase.from('debt_accounts').update({ current_balance: newBalance }).eq('id', debtId);
           set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === debtId ? { ...a, currentBalance: newBalance } : a) }));
+        }
+      }
+      // Avance: deposit into a checking account (cash advance from credit card)
+      if (depositToAccountId) {
+        const destAccount = get().checkingAccounts.find(a => a.id === depositToAccountId);
+        if (destAccount) {
+          const newBalance = destAccount.currentBalance + entry.amount;
+          await supabase.from('savings_accounts').update({ current_balance: newBalance }).eq('id', depositToAccountId);
+          set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === depositToAccountId ? { ...a, currentBalance: newBalance } : a) }));
         }
       }
     }

@@ -43,6 +43,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const [linkedBudgetId, setLinkedBudgetId] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [depositToId, setDepositToId] = useState<string>('none');
   const [saving, setSaving] = useState(false);
 
   function addTag() {
@@ -57,6 +58,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
     : null;
   const availableBalance = selectedCheckingAccount?.currentBalance ?? null;
   const exceedsBalance = availableBalance !== null && Number(amount) > availableBalance;
+  const isPayingFromDebt = payFromId.startsWith('debt_');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,6 +71,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
     const isChecking = payFromId.startsWith('checking_');
     const isDebt = payFromId.startsWith('debt_');
     const accountId = isChecking ? payFromId.replace('checking_', '') : isDebt ? payFromId.replace('debt_', '') : null;
+    const depositAccount = isPayingFromDebt && depositToId !== 'none' ? depositToId : undefined;
     try {
       await addSpending({
         date,
@@ -79,12 +82,13 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
         linkedAccountId: isChecking ? accountId : null,
         linkedBudgetId,
         tags,
-      });
-      toast.success('Spending added');
+      }, depositAccount);
+      toast.success(depositAccount ? 'Avance recorded' : 'Spending added');
       setDescription('');
       setAmount('');
       setCategory('other');
       setPayFromId('none');
+      setDepositToId('none');
       setLinkedBudgetId(null);
       setTags([]);
       setTagInput('');
@@ -131,7 +135,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
           </div>
           <div className="space-y-2">
             <Label>Pay From</Label>
-            <Select value={payFromId} onValueChange={setPayFromId}>
+            <Select value={payFromId} onValueChange={v => { setPayFromId(v); if (!v.startsWith('debt_')) setDepositToId('none'); }}>
               <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Cash / Other</SelectItem>
@@ -158,6 +162,27 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
               </SelectContent>
             </Select>
           </div>
+          {isPayingFromDebt && (
+            <div className="space-y-2">
+              <Label>Deposit To (Avance)</Label>
+              <Select value={depositToId} onValueChange={setDepositToId}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (regular charge)</SelectItem>
+                  {checkingAccounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} ({formatCurrency(a.currentBalance, a.currency)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {depositToId !== 'none' && (
+                <p className="text-[11px] text-muted-foreground">
+                  Cash advance: charges card + deposits into account
+                </p>
+              )}
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Link to Budget</Label>
             <Select value={linkedBudgetId ?? ''} onValueChange={v => setLinkedBudgetId(v || null)}>
