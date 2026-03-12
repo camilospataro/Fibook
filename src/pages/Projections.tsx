@@ -137,24 +137,31 @@ export default function Projections() {
   const debt = totalDebtCOP(debtAccounts, exchangeRate);
   const checking = totalCheckingCOP(checkingAccounts, exchangeRate);
 
-  // Average monthly discretionary spending (last 90 days)
+  // Average monthly discretionary spending (last 90 days, excluding auto-charges)
   const avgSpending = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 90);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
-    const recent = spending.filter(e => e.date >= cutoffStr);
+    const recent = spending.filter(e => e.date >= cutoffStr && !(e.tags ?? []).includes('auto-charge'));
     const total = recent.reduce((s, e) => s + e.amount, 0);
     return recent.length > 0 ? (total / 3) : 0; // average per month over 3 months
   }, [spending]);
-
-  const totalOutflows = fixedExp + subsCost + debtPayments + avgSpending + savingsTarget;
-  const surplus = income - totalOutflows;
 
   // ─── Recurring charges map (subs/expenses linked to debt accounts) ──
   const recurringCharges = useMemo(
     () => newChargesPerDebtAccount(debtAccounts, subscriptions, fixedExpenses, exchangeRate),
     [debtAccounts, subscriptions, fixedExpenses, exchangeRate],
   );
+
+  // Debt payments include paying off recurring charges already counted in fixedExp+subsCost.
+  // Only add the principal paydown portion to avoid double-counting.
+  const totalRecurringOnDebt = useMemo(
+    () => Array.from(recurringCharges.values()).reduce((s, v) => s + v, 0),
+    [recurringCharges],
+  );
+  const principalPaydown = Math.max(0, debtPayments - totalRecurringOnDebt);
+  const totalOutflows = fixedExp + subsCost + principalPaydown + avgSpending + savingsTarget;
+  const surplus = income - totalOutflows;
 
   // ─── Milestones ─────────────────────────────────────────
   const milestones = useMemo(() => {
@@ -182,11 +189,15 @@ export default function Projections() {
       if (state.some(a => a.balance > a.newCharges)) debtFreeMonths = Infinity;
     }
 
-    // Emergency fund: uses current active debt payments only (not debts already at 0)
-    const activeDebtPayments = debtAccounts
+    // Emergency fund: uses principal paydown only (recurring charges already in fixedExp+subsCost)
+    const activeDebtPrincipal = debtAccounts
       .filter(a => a.currentBalance > 0)
-      .reduce((s, a) => s + toCOP(a.monthlyPayment || a.minimumMonthlyPayment, a.currency, exchangeRate), 0);
-    const monthlyExp = fixedExp + subsCost + activeDebtPayments + avgSpending;
+      .reduce((s, a) => {
+        const payment = toCOP(a.monthlyPayment || a.minimumMonthlyPayment, a.currency, exchangeRate);
+        const charges = recurringCharges.get(a.id) ?? 0;
+        return s + Math.max(0, payment - charges);
+      }, 0);
+    const monthlyExp = fixedExp + subsCost + activeDebtPrincipal + avgSpending;
     const emergencyMonths = monthlyExp > 0 ? checking / monthlyExp : Infinity;
 
     // Savings target: surplus increases as debts get paid off
@@ -210,7 +221,7 @@ export default function Projections() {
     const outflows: [string, number, string][] = [
       ['Fixed Exp.', fixedExp, '#FF6B6B'],
       ['Subscriptions', subsCost, '#FF6B6B'],
-      ['Debt Payments', debtPayments, '#FBBF24'],
+      ['Debt Paydown', principalPaydown, '#FBBF24'],
       ['Avg. Spending', avgSpending, '#FF6B6B'],
       ['Savings', savingsTarget, '#4F8EF7'],
     ];
@@ -229,7 +240,7 @@ export default function Projections() {
       if (i === items.length - 1) return { name: item.name, base: 0, value: item.running, fill: item.running >= 0 ? '#00D4AA' : '#FF6B6B' };
       return { name: item.name, base: item.running, value: -item.amount, fill: (outflows[i - 1]?.[2] ?? '#FF6B6B') as string };
     });
-  }, [income, fixedExp, subsCost, debtPayments, avgSpending, savingsTarget]);
+  }, [income, fixedExp, subsCost, principalPaydown, avgSpending, savingsTarget]);
 
   // ─── Per-account debt timelines ─────────────────────────
   const { debtChartData, accountMeta } = useMemo(() => {
@@ -295,24 +306,25 @@ export default function Projections() {
       }
 
       // Pay each account, freeing up excess payment capacity from paid-off accounts
-      let freedPayments = 0;
+      let freedPrincipal = 0;
       for (const acc of accountState) {
         if (acc.balance <= 0) {
-          // Payment fully freed (covers new charges with surplus)
-          freedPayments += acc.payment - acc.newCharges;
+          // Account already paid off — principal portion of payment is freed
+          freedPrincipal += Math.max(0, acc.payment - acc.newCharges);
           continue;
         }
-        const pay = Math.min(acc.payment, acc.balance);
         acc.balance = Math.max(0, acc.balance - acc.payment);
         if (acc.balance <= 0) {
-          // Account just paid off — freed amount is payment minus what covers new charges
-          freedPayments += acc.payment - pay - acc.newCharges;
+          // Account just paid off — freed principal portion
+          freedPrincipal += Math.max(0, acc.payment - acc.newCharges);
         }
       }
 
-      // Checking grows by: base surplus - active debt payments + freed payments
-      const activePayments = accountState.reduce((s, a) => a.balance > 0 ? s + a.payment : s, 0);
-      const monthSurplus = baseSurplus - activePayments + freedPayments;
+      // Checking grows by: base surplus - active principal paydowns + freed principal
+      // (recurring charges on debt are already in fixedExp+subsCost, so only subtract principal portion)
+      const activePrincipal = accountState.reduce((s, a) =>
+        a.balance > 0 ? s + Math.max(0, a.payment - a.newCharges) : s, 0);
+      const monthSurplus = baseSurplus - activePrincipal + freedPrincipal;
       chk += Math.max(0, monthSurplus);
     }
     return data;
@@ -345,8 +357,9 @@ export default function Projections() {
     const currentNetPayment = currentTotal - totalNewCharges;
     const currentMonths = currentNetPayment > 0 ? monthsToPayoff(debt, currentTotal, totalNewCharges) : Infinity;
 
-    // 3. Aggressive (snowball)
-    const surplusForSnowball = Math.max(0, income - fixedExp - subsCost - avgSpending - savingsTarget - minPayments);
+    // 3. Aggressive (snowball) — only subtract principal portion of min payments
+    const minPrincipal = Math.max(0, minPayments - totalNewCharges);
+    const surplusForSnowball = Math.max(0, income - fixedExp - subsCost - avgSpending - savingsTarget - minPrincipal);
     const aggressiveTimeline = snowballPayoff(debtAccounts, surplusForSnowball, exchangeRate, recurringCharges);
     const aggressiveMonths = aggressiveTimeline.length > 0 ? aggressiveTimeline.length - 1 : Infinity;
 
