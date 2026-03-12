@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useFinanceStore } from '@/store/useFinanceStore';
@@ -49,6 +49,7 @@ function SubGroup({ groupName, groupSubs, exchangeRate, annual }: {
 }
 
 export default function SubscriptionsSummary() {
+  const [view, setView] = useState<'monthly' | 'annual'>('monthly');
   const subs = useFinanceStore(s => s.subscriptions);
   const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
   const activeSubs = subs.filter(s => s.active);
@@ -86,46 +87,53 @@ export default function SubscriptionsSummary() {
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [annualSubs]);
 
+  const isMonthly = view === 'monthly';
+  const currentGroups = isMonthly ? groupedMonthly : groupedAnnual;
+  const currentTotal = isMonthly ? monthlyTotal : annualTotal;
+  const currentCount = isMonthly ? monthlySubs.length : annualSubs.length;
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-sm">Subscriptions</CardTitle>
         <Badge variant="secondary" className="text-xs">{activeSubs.length} active</Badge>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Monthly section */}
-        {monthlySubs.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-foreground/70 uppercase tracking-wider">Monthly</span>
-              <span className="text-lg font-bold text-warning">{formatCOP(monthlyTotal)}<span className="text-xs text-muted-foreground font-normal">/mo</span></span>
-            </div>
-            <div className="space-y-3">
-              {groupedMonthly.map(([groupName, groupSubs]) => (
-                <SubGroup key={groupName} groupName={groupName} groupSubs={groupSubs} exchangeRate={exchangeRate} />
-              ))}
-            </div>
-          </div>
-        )}
+      <CardContent className="space-y-3">
+        {/* Toggle */}
+        <div className="flex rounded-lg bg-secondary/70 p-0.5">
+          <button
+            onClick={() => setView('monthly')}
+            className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+              isMonthly ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Monthly ({monthlySubs.length})
+          </button>
+          <button
+            onClick={() => setView('annual')}
+            className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+              !isMonthly ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Annual ({annualSubs.length})
+          </button>
+        </div>
 
-        {/* Annual section */}
-        {annualSubs.length > 0 && (
-          <div>
-            {monthlySubs.length > 0 && <div className="border-t border-border/50 mb-3" />}
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-foreground/70 uppercase tracking-wider">Annual</span>
-              <span className="text-lg font-bold text-accent">{formatCOP(annualTotal)}<span className="text-xs text-muted-foreground font-normal">/yr</span></span>
-            </div>
-            <div className="space-y-3">
-              {groupedAnnual.map(([groupName, groupSubs]) => (
-                <SubGroup key={groupName} groupName={groupName} groupSubs={groupSubs} exchangeRate={exchangeRate} annual />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Total */}
+        <p className={`text-lg font-bold ${isMonthly ? 'text-warning' : 'text-accent'}`}>
+          {formatCOP(currentTotal)}
+          <span className="text-xs text-muted-foreground font-normal">{isMonthly ? '/mo' : '/yr'}</span>
+        </p>
 
-        {activeSubs.length === 0 && (
-          <p className="text-sm text-muted-foreground">No active subscriptions</p>
+        {/* Groups */}
+        <div className="space-y-3">
+          {currentGroups.map(([groupName, groupSubs]) => (
+            <SubGroup key={groupName} groupName={groupName} groupSubs={groupSubs} exchangeRate={exchangeRate} annual={!isMonthly} />
+          ))}
+        </div>
+
+        {currentCount === 0 && (
+          <p className="text-sm text-muted-foreground">No {view} subscriptions</p>
         )}
       </CardContent>
     </Card>
