@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatMonthLabel } from '@/lib/formatters';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import {
+  totalMonthlyIncome, totalFixedExpenses, totalSubscriptionsCOP,
+  totalDebtPaymentsCOP,
+} from '@/lib/calculations';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Cell } from 'recharts';
 
 type Metric = 'income-vs-expenses' | 'debt' | 'savings' | 'balance';
 
@@ -13,16 +17,43 @@ const metricLabels: Record<Metric, string> = {
   balance: 'Monthly Balance',
 };
 
+function toCOP(amount: number, currency: 'COP' | 'USD', rate: number) {
+  return currency === 'USD' ? amount * rate : amount;
+}
+
 export default function TrendsCard() {
   const snapshots = useFinanceStore(s => s.snapshots);
+  const debtAccounts = useFinanceStore(s => s.debtAccounts);
+  const incomeSources = useFinanceStore(s => s.incomeSources);
+  const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
+  const subscriptions = useFinanceStore(s => s.subscriptions);
+  const spending = useFinanceStore(s => s.spending);
+  const exchangeRate = useFinanceStore(s => s.settings?.exchangeRate ?? 4000);
+  const savingsTarget = useFinanceStore(s => s.settings?.savingsTarget ?? 0);
   const [metric, setMetric] = useState<Metric>('income-vs-expenses');
 
   const sortedSnapshots = useMemo(() =>
     [...snapshots].sort((a, b) => a.month.localeCompare(b.month)).slice(-12),
   [snapshots]);
 
+  // Average monthly discretionary spending (last 90 days)
+  const avgSpending = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const recent = spending.filter(e => e.date >= cutoffStr);
+    const total = recent.reduce((s, e) => s + e.amount, 0);
+    return recent.length > 0 ? (total / 3) : 0;
+  }, [spending]);
+
   const chartData = useMemo(() => {
-    return sortedSnapshots.map(s => {
+    const income = totalMonthlyIncome(incomeSources, exchangeRate);
+    const fixedExp = totalFixedExpenses(fixedExpenses, exchangeRate);
+    const subsCost = totalSubscriptionsCOP(subscriptions, exchangeRate);
+    const debtPayments = totalDebtPaymentsCOP(debtAccounts, exchangeRate);
+
+    // Historical data from snapshots
+    const historical = sortedSnapshots.map(s => {
       const label = formatMonthLabel(s.month).split(' ')[0].slice(0, 3);
       return {
         month: label,
@@ -31,11 +62,63 @@ export default function TrendsCard() {
         debtPaid: s.totalDebtPaid,
         savings: s.savings,
         balance: s.balance,
+        projected: false,
       };
     });
-  }, [sortedSnapshots]);
 
-  // Month-over-month deltas
+    // Determine current month key (YYYY-MM)
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const lastSnapshotMonth = sortedSnapshots.length > 0
+      ? sortedSnapshots[sortedSnapshots.length - 1].month
+      : currentMonthKey;
+
+    // Generate projected future months (up to 6 months ahead)
+    // Simulate per-account debt payoff — when balance hits 0, payment is freed
+    const accountState = debtAccounts.map(acc => ({
+      balance: toCOP(acc.currentBalance, acc.currency, exchangeRate),
+      payment: toCOP(acc.monthlyPayment || acc.minimumMonthlyPayment, acc.currency, exchangeRate),
+    }));
+
+    const projectedMonths: typeof historical = [];
+    const [lastYear, lastMon] = lastSnapshotMonth.split('-').map(Number);
+    const startDate = new Date(lastYear, lastMon - 1); // last snapshot month
+
+    for (let i = 1; i <= 6; i++) {
+      const d = new Date(startDate.getFullYear(), startDate.getMonth() + i);
+      const label = d.toLocaleDateString('en-US', { month: 'short' }).slice(0, 3);
+
+      // Simulate debt payments for this month
+      let monthDebtPayments = 0;
+      for (const acc of accountState) {
+        if (acc.balance <= 0) continue;
+        const pay = Math.min(acc.payment, acc.balance);
+        acc.balance = Math.max(0, acc.balance - acc.payment);
+        monthDebtPayments += pay;
+      }
+
+      const projExpenses = fixedExp + subsCost + monthDebtPayments + avgSpending;
+      const projBalance = income - projExpenses;
+      const projSavings = Math.max(0, projBalance - savingsTarget) + savingsTarget;
+
+      projectedMonths.push({
+        month: label,
+        income,
+        expenses: projExpenses,
+        debtPaid: monthDebtPayments,
+        savings: Math.min(projSavings, Math.max(0, projBalance)),
+        balance: projBalance,
+        projected: true,
+      });
+    }
+
+    // Combine: take last N historical + projected to fill ~12 bars
+    const maxHistorical = Math.max(0, 12 - projectedMonths.length);
+    const trimmedHistorical = historical.slice(-maxHistorical);
+    return [...trimmedHistorical, ...projectedMonths];
+  }, [sortedSnapshots, debtAccounts, incomeSources, fixedExpenses, subscriptions, exchangeRate, avgSpending, savingsTarget]);
+
+  // Month-over-month deltas (from snapshots only)
   const deltas = useMemo(() => {
     if (sortedSnapshots.length < 2) return null;
     const curr = sortedSnapshots[sortedSnapshots.length - 1];
@@ -48,13 +131,13 @@ export default function TrendsCard() {
     };
   }, [sortedSnapshots]);
 
-  if (sortedSnapshots.length < 2) {
+  if (sortedSnapshots.length < 1 && debtAccounts.length === 0) {
     return (
       <Card className="bg-card border-border">
         <CardHeader className="pb-2"><CardTitle className="text-sm">Trends</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground py-4 text-center">
-            Save at least 2 monthly snapshots to see trends.
+            Save at least 1 monthly snapshot to see trends.
           </p>
         </CardContent>
       </Card>
@@ -101,27 +184,58 @@ export default function TrendsCard() {
               <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} tickFormatter={v => `${(v / 1000000).toFixed(1)}M`} />
               <Tooltip
                 contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }}
-                formatter={((value: number) => [formatCOP(value)]) as never}
+                formatter={((value: number, _name: string, props: { payload: { projected: boolean } }) => {
+                  const suffix = props.payload.projected ? ' (projected)' : '';
+                  return [formatCOP(value) + suffix];
+                }) as never}
               />
               {metric === 'income-vs-expenses' && (
                 <>
                   <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="income" name="Income" fill="var(--income)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expenses" name="Expenses" fill="var(--expense)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="income" name="Income" radius={[4, 4, 0, 0]}>
+                    {chartData.map((d, i) => (
+                      <Cell key={i} fill="var(--income)" fillOpacity={d.projected ? 0.4 : 1} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="expenses" name="Expenses" radius={[4, 4, 0, 0]}>
+                    {chartData.map((d, i) => (
+                      <Cell key={i} fill="var(--expense)" fillOpacity={d.projected ? 0.4 : 1} />
+                    ))}
+                  </Bar>
                 </>
               )}
               {metric === 'debt' && (
-                <Bar dataKey="debtPaid" name="Debt Paid" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="debtPaid" name="Debt Paid" radius={[4, 4, 0, 0]}>
+                  {chartData.map((d, i) => (
+                    <Cell key={i} fill="var(--accent)" fillOpacity={d.projected ? 0.4 : 1} />
+                  ))}
+                </Bar>
               )}
               {metric === 'savings' && (
-                <Bar dataKey="savings" name="Savings" fill="var(--income)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="savings" name="Savings" radius={[4, 4, 0, 0]}>
+                  {chartData.map((d, i) => (
+                    <Cell key={i} fill="var(--income)" fillOpacity={d.projected ? 0.4 : 1} />
+                  ))}
+                </Bar>
               )}
               {metric === 'balance' && (
-                <Bar dataKey="balance" name="Balance" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="balance" name="Balance" radius={[4, 4, 0, 0]}>
+                  {chartData.map((d, i) => (
+                    <Cell key={i} fill="var(--primary)" fillOpacity={d.projected ? 0.4 : 1} />
+                  ))}
+                </Bar>
               )}
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Legend for projected */}
+        {chartData.some(d => d.projected) && (
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground justify-center">
+            <div className="w-3 h-3 rounded-sm bg-muted-foreground/30" />
+            <span>Faded bars = projected (accounts for debt payoff)</span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
