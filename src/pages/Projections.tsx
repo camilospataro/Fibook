@@ -75,7 +75,6 @@ function snowballPayoff(
     }))
     .sort((a, b) => a.balance - b.balance);
 
-  const totalMinimums = state.reduce((s, a) => s + a.minPayment, 0);
   let extraPool = Math.max(0, surplus);
 
   const timeline: { month: number; total: number }[] = [
@@ -181,7 +180,7 @@ export default function Projections() {
       ['Savings', savingsTarget, '#4F8EF7'],
     ];
 
-    for (const [name, amount, color] of outflows) {
+    for (const [name, amount] of outflows) {
       if (amount <= 0) continue;
       running -= amount;
       items.push({ name, amount: -amount, running });
@@ -353,7 +352,7 @@ export default function Projections() {
                 <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
-                  formatter={(value: number) => formatCOP(Math.abs(value))}
+                  formatter={((value: number) => formatCOP(Math.abs(value))) as never}
                   labelStyle={{ color: '#94A3B8' }}
                 />
                 <ReferenceLine y={0} stroke="#334155" />
@@ -399,10 +398,10 @@ export default function Projections() {
                   <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
-                    formatter={(value: number, name: string) => {
+                    formatter={((value: number, name: string) => {
                       const meta = accountMeta.find(a => a.id === name);
                       return [formatCOP(value), meta?.name ?? name];
-                    }}
+                    }) as never}
                     labelStyle={{ color: '#94A3B8' }}
                   />
                   {accountMeta.map(a => (
@@ -463,10 +462,10 @@ export default function Projections() {
                 <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
-                  formatter={(value: number, name: string) => {
+                  formatter={((value: number, name: string) => {
                     const labels: Record<string, string> = { checking: 'Checking', debt: 'Debt', netWorth: 'Net Worth' };
                     return [formatCOP(Math.abs(value)), labels[name] ?? name];
-                  }}
+                  }) as never}
                   labelStyle={{ color: '#94A3B8' }}
                 />
                 <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 4" />
@@ -538,7 +537,7 @@ export default function Projections() {
                   <YAxis tick={TICK_STYLE} tickFormatter={fmtAxis} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE}
-                    formatter={(value: number) => formatCOP(value)}
+                    formatter={((value: number) => formatCOP(value)) as never}
                     labelStyle={{ color: '#94A3B8' }}
                   />
                   <Line type="monotone" dataKey="minimum" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="6 3" dot={false} name="Minimum" />

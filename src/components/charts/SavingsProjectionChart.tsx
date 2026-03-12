@@ -86,7 +86,7 @@ export default function SavingsProjectionChart() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#111827', border: '1px solid #1E293B', borderRadius: '8px' }}
                 itemStyle={{ color: '#E8ECF4' }}
-                formatter={(value: number) => formatCOP(value)}
+                formatter={((value: number) => formatCOP(value)) as never}
                 labelStyle={{ color: '#94A3B8' }}
               />
               <Area type="monotone" dataKey="savings" stroke="#00D4AA" fill="url(#savingsGrad)" strokeWidth={2} />

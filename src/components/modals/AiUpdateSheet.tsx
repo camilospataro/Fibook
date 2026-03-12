@@ -3,7 +3,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useFinanceStore } from '@/store/useFinanceStore';
-import { supabase } from '@/lib/supabase';
 import { getCurrentMonth, getToday, formatCOP } from '@/lib/formatters';
 import { Send, Loader2, Check, AlertCircle, Paperclip, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';

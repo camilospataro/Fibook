@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, PiggyBank, Sparkles, Landmark, ShoppingBag } from 'lucide-react';
+import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles, Landmark, ShoppingBag } from 'lucide-react';
 import AiUpdateSheet from '@/components/modals/AiUpdateSheet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatCurrency, formatDate, getCurrentMonth, formatMonthLabel } from '@/lib/formatters';
-import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP, totalDebtPaymentsCOP } from '@/lib/calculations';
+import { totalFixedExpenses, totalSubscriptionsCOP, totalMinimumPaymentsCOP } from '@/lib/calculations';
 import { toast } from 'sonner';
 import type { ExpenseCategory } from '@/types';
 
@@ -174,7 +174,7 @@ export default function Monthly() {
     toast.success('Subscription added');
   }
   async function handleAddDebt() {
-    await store.addDebtAccount({ name: newDebt.name, currency: newDebt.currency, currentBalance: Number(newDebt.currentBalance), minimumMonthlyPayment: Number(newDebt.minimumMonthlyPayment), color: newDebt.color, linkedAccountId: newDebt.linkedAccountId });
+    await store.addDebtAccount({ name: newDebt.name, currency: newDebt.currency, currentBalance: Number(newDebt.currentBalance), minimumMonthlyPayment: Number(newDebt.minimumMonthlyPayment), monthlyPayment: Number(newDebt.minimumMonthlyPayment), color: newDebt.color, linkedAccountId: newDebt.linkedAccountId });
     setNewDebt({ name: '', currency: 'COP', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[accounts.length % DEBT_COLORS.length], linkedAccountId: null });
     setShowAddDebt(false);
     toast.success('Debt account added');
@@ -259,7 +259,7 @@ export default function Monthly() {
       <div className="flex items-center gap-2">
         <div className="flex rounded-lg bg-secondary/50 p-1 gap-1 flex-1">
           <button
-            onClick={() => { setActiveTab('balances'); setEditMode(false); setExpandedId(null); }}
+            onClick={() => { setActiveTab('balances'); setExpandedId(null); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
               activeTab === 'balances'
                 ? 'bg-card text-foreground shadow-sm'
@@ -270,7 +270,7 @@ export default function Monthly() {
             Balances
           </button>
           <button
-            onClick={() => { setActiveTab('movements'); setEditMode(false); setExpandedId(null); }}
+            onClick={() => { setActiveTab('movements'); setExpandedId(null); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
               activeTab === 'movements'
                 ? 'bg-card text-foreground shadow-sm'

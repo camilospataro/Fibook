@@ -170,7 +170,7 @@ export default function SimulationChart({
             <AreaChart
               data={chartData}
               margin={{ top: topMargin, right: 5, bottom: 5, left: 5 }}
-              onClick={handleClick}
+              onClick={handleClick as never}
               className={onDayClick ? 'cursor-crosshair' : ''}
             >
               <defs>
@@ -211,12 +211,12 @@ export default function SimulationChart({
                   maxWidth: 260,
                 }}
                 labelFormatter={v => `Day ${v}`}
-                formatter={(value: number, name: string) => {
+                formatter={((value: number, name: string) => {
                   if (name.includes('_') && name.length > 30) return null;
                   const acc = checkingAccounts.find(a => a.id === name);
                   if (!acc) return [value, name];
                   return [formatCurrency(value, acc.currency), acc.name];
-                }}
+                }) as never}
               />
               <ReferenceLine y={0} stroke="hsl(var(--destructive))" strokeDasharray="3 3" opacity={0.5} />
 

@@ -291,7 +291,7 @@ export default function Simulation() {
             <ArrowUpCircle className="w-3 h-3 text-destructive shrink-0" />
           )}
           <span className={`text-[11px] truncate flex-1 ${!rule.enabled ? 'text-muted-foreground line-through' : ''}`}>{rule.name}</span>
-          {rule.spread && <Repeat className="w-3 h-3 text-accent shrink-0" title="Spread across month" />}
+          {rule.spread && <span title="Spread across month"><Repeat className="w-3 h-3 text-accent shrink-0" /></span>}
           <Badge variant="secondary" className="text-[9px] shrink-0">{typeLabel[rule.sourceType]}</Badge>
           {!rule.spread && <span className="text-[10px] text-muted-foreground shrink-0">Day {rule.day}</span>}
           {rule.spread && <span className="text-[10px] text-accent shrink-0">Weekly</span>}

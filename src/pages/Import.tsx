@@ -116,7 +116,7 @@ export default function Import() {
         const a = parsed.debt_accounts[i];
         await store.addDebtAccount({
           name: a.name, currency: a.currency, currentBalance: a.current_balance,
-          minimumMonthlyPayment: a.minimum_monthly_payment, color: a.color,
+          minimumMonthlyPayment: a.minimum_monthly_payment, monthlyPayment: a.minimum_monthly_payment, color: a.color, linkedAccountId: null,
         });
       }
 
@@ -124,7 +124,7 @@ export default function Import() {
       for (let i = 0; i < parsed.income_sources.length; i++) {
         if (excluded.income_sources.has(i)) continue;
         const s = parsed.income_sources[i];
-        await store.addIncomeSource({ name: s.name, amount: s.amount, currency: s.currency ?? 'COP', isRecurring: s.is_recurring });
+        await store.addIncomeSource({ name: s.name, amount: s.amount, currency: s.currency ?? 'COP', isRecurring: s.is_recurring, linkedAccountId: null, depositDay: 1 });
       }
 
       // Fixed expenses
@@ -134,6 +134,7 @@ export default function Import() {
         await store.addFixedExpense({
           name: e.name, amount: e.amount, currency: e.currency ?? 'COP',
           category: e.category as 'housing' | 'food' | 'transport' | 'entertainment' | 'health' | 'other',
+          linkedAccountId: null, paymentDay: 1, paymentMode: 'manual',
         });
       }
 
@@ -141,7 +142,7 @@ export default function Import() {
       for (let i = 0; i < parsed.subscriptions.length; i++) {
         if (excluded.subscriptions.has(i)) continue;
         const s = parsed.subscriptions[i];
-        await store.addSubscription({ name: s.name, currency: s.currency, amount: s.amount, group: (s as Record<string, unknown>).group as string ?? 'General', active: s.active });
+        await store.addSubscription({ name: s.name, currency: s.currency, amount: s.amount, group: (s as Record<string, unknown>).group as string ?? 'General', active: s.active, linkedAccountId: null, paymentDay: 1, billingCycle: 'monthly', renewalMonth: null });
       }
 
       // Spending
@@ -152,6 +153,7 @@ export default function Import() {
           date: e.date, description: e.description, amount: e.amount,
           category: e.category as 'groceries' | 'transport' | 'food' | 'entertainment' | 'health' | 'shopping' | 'other',
           paymentMethod: e.payment_method as 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa',
+          linkedAccountId: null, linkedBudgetId: null,
         });
       }
 
