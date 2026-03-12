@@ -27,6 +27,7 @@ interface Props {
 export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const addSpending = useFinanceStore(s => s.addSpending);
   const checkingAccounts = useFinanceStore(s => s.checkingAccounts);
+  const debtAccounts = useFinanceStore(s => s.debtAccounts);
   const fixedExpenses = useFinanceStore(s => s.fixedExpenses);
   const budgetItems = useMemo(() =>
     fixedExpenses.map(e => ({ id: e.id, name: e.name, amount: e.amount, currency: e.currency })),
@@ -36,7 +37,7 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<SpendingCategory>('other');
-  const [linkedAccountId, setLinkedAccountId] = useState<string | null>(null);
+  const [payFromId, setPayFromId] = useState<string>('none');
   const [linkedBudgetId, setLinkedBudgetId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -44,20 +45,23 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
     e.preventDefault();
     if (!description || !amount) return;
     setSaving(true);
+    const isChecking = payFromId.startsWith('checking_');
+    const isDebt = payFromId.startsWith('debt_');
+    const accountId = isChecking ? payFromId.replace('checking_', '') : isDebt ? payFromId.replace('debt_', '') : null;
     await addSpending({
       date,
       description,
       amount: Number(amount),
       category,
-      paymentMethod: linkedAccountId ? `checking_${linkedAccountId}` : 'cash',
-      linkedAccountId,
+      paymentMethod: payFromId === 'none' ? 'cash' : payFromId as `checking_${string}` | `debt_${string}`,
+      linkedAccountId: isChecking ? accountId : null,
       linkedBudgetId,
     });
     toast.success('Spending added');
     setDescription('');
     setAmount('');
     setCategory('other');
-    setLinkedAccountId(null);
+    setPayFromId('none');
     setLinkedBudgetId(null);
     setDate(getToday());
     setSaving(false);
@@ -94,15 +98,30 @@ export default function AddSpendingSheet({ open, onOpenChange }: Props) {
           </div>
           <div className="space-y-2">
             <Label>Pay From</Label>
-            <Select value={linkedAccountId ?? 'none'} onValueChange={v => setLinkedAccountId(v === 'none' ? null : v)}>
+            <Select value={payFromId} onValueChange={setPayFromId}>
               <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Cash / Other</SelectItem>
-                {checkingAccounts.map(a => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name} ({formatCurrency(a.currentBalance, a.currency)})
-                  </SelectItem>
-                ))}
+                {checkingAccounts.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Checking</div>
+                    {checkingAccounts.map(a => (
+                      <SelectItem key={a.id} value={`checking_${a.id}`}>
+                        {a.name} ({formatCurrency(a.currentBalance, a.currency)})
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+                {debtAccounts.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Credit Cards</div>
+                    {debtAccounts.map(a => (
+                      <SelectItem key={a.id} value={`debt_${a.id}`}>
+                        {a.name} ({formatCurrency(a.currentBalance, a.currency)})
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>

@@ -55,6 +55,9 @@ interface FinanceState {
 
   // Snapshots
   saveSnapshot: (snapshot: Omit<MonthlySnapshot, 'id' | 'userId'>) => Promise<void>;
+
+  // Scheduled payments
+  processScheduledPayments: () => Promise<void>;
 }
 
 function mapSettings(row: Record<string, unknown>): Settings {
@@ -96,6 +99,7 @@ function mapExpense(row: Record<string, unknown>): FixedExpense {
     amount: row.amount as number, currency: (row.currency as 'COP' | 'USD') ?? 'COP',
     category: row.category as FixedExpense['category'],
     linkedAccountId: (row.linked_account_id as string) ?? null,
+    paymentDay: (row.payment_day as number) ?? 1,
   };
 }
 
@@ -105,6 +109,7 @@ function mapSubscription(row: Record<string, unknown>): Subscription {
     currency: row.currency as 'COP' | 'USD', amount: row.amount as number,
     group: (row.group as string) ?? 'General', active: row.active as boolean,
     linkedAccountId: (row.linked_account_id as string) ?? null,
+    paymentDay: (row.payment_day as number) ?? 1,
   };
 }
 
@@ -300,7 +305,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!userId) return;
     const { data } = await supabase.from('fixed_expenses').insert({
       user_id: userId, name: expense.name, amount: expense.amount, currency: expense.currency,
-      category: expense.category, linked_account_id: expense.linkedAccountId ?? null,
+      category: expense.category, linked_account_id: expense.linkedAccountId ?? null, payment_day: expense.paymentDay ?? 1,
     }).select().single();
     if (data) set(s => ({ fixedExpenses: [...s.fixedExpenses, mapExpense(data)] }));
   },
@@ -311,6 +316,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.category !== undefined) dbUpdates.category = updates.category;
     if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
+    if (updates.paymentDay !== undefined) dbUpdates.payment_day = updates.paymentDay;
     await supabase.from('fixed_expenses').update(dbUpdates).eq('id', id);
     set(s => ({ fixedExpenses: s.fixedExpenses.map(e => e.id === id ? { ...e, ...updates } : e) }));
   },
@@ -324,7 +330,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('subscriptions').insert({
-      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, group: sub.group, active: sub.active, linked_account_id: sub.linkedAccountId ?? null,
+      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, group: sub.group, active: sub.active, linked_account_id: sub.linkedAccountId ?? null, payment_day: sub.paymentDay ?? 1,
     }).select().single();
     if (data) set(s => ({ subscriptions: [...s.subscriptions, mapSubscription(data)] }));
   },
@@ -336,6 +342,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.group !== undefined) dbUpdates.group = updates.group;
     if (updates.active !== undefined) dbUpdates.active = updates.active;
     if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
+    if (updates.paymentDay !== undefined) dbUpdates.payment_day = updates.paymentDay;
     await supabase.from('subscriptions').update(dbUpdates).eq('id', id);
     set(s => ({ subscriptions: s.subscriptions.map(sub => sub.id === id ? { ...sub, ...updates } : sub) }));
   },
@@ -365,6 +372,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
           const newBalance = account.currentBalance - entry.amount;
           await supabase.from('savings_accounts').update({ current_balance: newBalance }).eq('id', accountId);
           set(s => ({ checkingAccounts: s.checkingAccounts.map(a => a.id === accountId ? { ...a, currentBalance: newBalance } : a) }));
+        }
+      }
+      // Add to linked debt account (credit card charge)
+      if (entry.paymentMethod.startsWith('debt_')) {
+        const debtId = entry.paymentMethod.replace('debt_', '');
+        const debtAccount = get().debtAccounts.find(a => a.id === debtId);
+        if (debtAccount) {
+          const newBalance = debtAccount.currentBalance + entry.amount;
+          await supabase.from('debt_accounts').update({ current_balance: newBalance }).eq('id', debtId);
+          set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === debtId ? { ...a, currentBalance: newBalance } : a) }));
         }
       }
     }
@@ -405,6 +422,70 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
           ? s.snapshots.map(sn => sn.month === mapped.month ? mapped : sn)
           : [mapped, ...s.snapshots],
       }));
+    }
+  },
+
+  // Scheduled payments — process due subscriptions/expenses and charge to linked debt account
+  processScheduledPayments: async () => {
+    const { userId, fixedExpenses, subscriptions, debtAccounts } = get();
+    if (!userId) return;
+
+    const now = new Date();
+    const today = now.getDate();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Gather all items that are due (paymentDay <= today) and have a linked debt account
+    const items: { sourceType: string; sourceId: string; amount: number; currency: string; linkedAccountId: string }[] = [];
+
+    for (const exp of fixedExpenses) {
+      if (exp.paymentDay <= today && exp.linkedAccountId) {
+        const linkedAccount = debtAccounts.find(a => a.id === exp.linkedAccountId);
+        if (linkedAccount) {
+          items.push({ sourceType: 'expense', sourceId: exp.id, amount: exp.amount, currency: exp.currency, linkedAccountId: exp.linkedAccountId });
+        }
+      }
+    }
+    for (const sub of subscriptions) {
+      if (sub.active && sub.paymentDay <= today && sub.linkedAccountId) {
+        const linkedAccount = debtAccounts.find(a => a.id === sub.linkedAccountId);
+        if (linkedAccount) {
+          items.push({ sourceType: 'subscription', sourceId: sub.id, amount: sub.amount, currency: sub.currency, linkedAccountId: sub.linkedAccountId });
+        }
+      }
+    }
+
+    if (items.length === 0) return;
+
+    // Check which ones have already been processed this month
+    const { data: processed } = await supabase
+      .from('processed_payments')
+      .select('source_id')
+      .eq('month', currentMonth);
+    const processedIds = new Set((processed ?? []).map(p => (p as { source_id: string }).source_id));
+
+    // Process unprocessed items
+    for (const item of items) {
+      if (processedIds.has(item.sourceId)) continue;
+
+      const debtAccount = debtAccounts.find(a => a.id === item.linkedAccountId);
+      if (!debtAccount) continue;
+
+      // Convert amount if currencies differ
+      const exchangeRate = get().settings?.exchangeRate ?? 4000;
+      let chargeAmount = item.amount;
+      if (item.currency !== debtAccount.currency) {
+        chargeAmount = item.currency === 'USD' ? item.amount * exchangeRate : item.amount / exchangeRate;
+      }
+
+      // Add to debt balance
+      const newBalance = debtAccount.currentBalance + chargeAmount;
+      await supabase.from('debt_accounts').update({ current_balance: newBalance }).eq('id', debtAccount.id);
+      set(s => ({ debtAccounts: s.debtAccounts.map(a => a.id === debtAccount.id ? { ...a, currentBalance: newBalance } : a) }));
+
+      // Record as processed
+      await supabase.from('processed_payments').insert({
+        user_id: userId, source_type: item.sourceType, source_id: item.sourceId, month: currentMonth,
+      });
     }
   },
 }));

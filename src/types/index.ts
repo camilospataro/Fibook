@@ -46,6 +46,7 @@ export interface FixedExpense {
   currency: 'COP' | 'USD';
   category: 'housing' | 'food' | 'transport' | 'entertainment' | 'health' | 'other';
   linkedAccountId: string | null;
+  paymentDay: number;
 }
 
 export interface Subscription {
@@ -57,6 +58,7 @@ export interface Subscription {
   group: string;
   active: boolean;
   linkedAccountId: string | null;
+  paymentDay: number;
 }
 
 export interface SpendingEntry {
@@ -66,7 +68,7 @@ export interface SpendingEntry {
   description: string;
   amount: number;
   category: 'groceries' | 'transport' | 'food' | 'entertainment' | 'health' | 'shopping' | 'other';
-  paymentMethod: 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa' | `checking_${string}`;
+  paymentMethod: 'cash' | 'debit' | 'credit_mastercard_cop' | 'credit_mastercard_usd' | 'credit_visa' | `checking_${string}` | `debt_${string}`;
   linkedAccountId: string | null;
   linkedBudgetId: string | null;
 }

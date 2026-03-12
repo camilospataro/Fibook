@@ -7,16 +7,20 @@ import BottomNav from './BottomNav';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const fetchAll = useFinanceStore(s => s.fetchAll);
+  const processScheduledPayments = useFinanceStore(s => s.processScheduledPayments);
   const userId = useFinanceStore(s => s.userId);
   const loading = useFinanceStore(s => s.loading);
 
   useEffect(() => {
     if (!userId) {
-      supabase.auth.getUser().then(({ data }) => {
-        if (data.user) fetchAll(data.user.id);
+      supabase.auth.getUser().then(async ({ data }) => {
+        if (data.user) {
+          await fetchAll(data.user.id);
+          await processScheduledPayments();
+        }
       });
     }
-  }, [fetchAll, userId]);
+  }, [fetchAll, processScheduledPayments, userId]);
 
   if (loading) {
     return (
