@@ -100,7 +100,7 @@ function mapExpense(row: Record<string, unknown>): FixedExpense {
     category: row.category as FixedExpense['category'],
     linkedAccountId: (row.linked_account_id as string) ?? null,
     paymentDay: (row.payment_day as number) ?? 1,
-    paymentMode: (row.payment_mode as 'auto' | 'manual') ?? 'auto',
+    paymentMode: (row.payment_mode as 'auto' | 'manual') ?? 'manual',
   };
 }
 
@@ -306,7 +306,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!userId) return;
     const { data } = await supabase.from('fixed_expenses').insert({
       user_id: userId, name: expense.name, amount: expense.amount, currency: expense.currency,
-      category: expense.category, linked_account_id: expense.linkedAccountId ?? null, payment_day: expense.paymentDay ?? 1, payment_mode: expense.paymentMode ?? 'auto',
+      category: expense.category, linked_account_id: expense.linkedAccountId ?? null, payment_day: expense.paymentDay ?? 1, payment_mode: expense.paymentMode ?? 'manual',
     }).select().single();
     if (data) set(s => ({ fixedExpenses: [...s.fixedExpenses, mapExpense(data)] }));
   },

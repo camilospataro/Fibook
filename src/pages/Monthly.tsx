@@ -100,7 +100,7 @@ export default function Monthly() {
   const [showAddIncome, setShowAddIncome] = useState(false);
 
   // New item forms
-  const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory, linkedAccountId: null as string | null, paymentDay: 1, paymentMode: 'auto' as 'auto' | 'manual' });
+  const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory, linkedAccountId: null as string | null, paymentDay: 1, paymentMode: 'manual' as 'auto' | 'manual' });
   const [newSub, setNewSub] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', amount: '', group: 'General', active: true, linkedAccountId: null as string | null, paymentDay: 1 });
   const [newDebt, setNewDebt] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[0], linkedAccountId: null as string | null });
   const [newCheckingAcct, setNewCheckingAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
@@ -163,7 +163,7 @@ export default function Monthly() {
   // Handlers
   async function handleAddExpense() {
     await store.addFixedExpense({ name: newExpense.name, amount: Number(newExpense.amount), currency: newExpense.currency, category: newExpense.category, linkedAccountId: newExpense.paymentMode === 'auto' ? newExpense.linkedAccountId : null, paymentDay: newExpense.paymentDay ?? 1, paymentMode: newExpense.paymentMode });
-    setNewExpense({ name: '', amount: '', currency: 'COP', category: 'other', linkedAccountId: null, paymentDay: 1, paymentMode: 'auto' });
+    setNewExpense({ name: '', amount: '', currency: 'COP', category: 'other', linkedAccountId: null, paymentDay: 1, paymentMode: 'manual' });
     setShowAddExpense(false);
     toast.success('Fixed expense added');
   }
