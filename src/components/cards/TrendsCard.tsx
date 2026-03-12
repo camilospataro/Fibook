@@ -4,7 +4,6 @@ import { useFinanceStore } from '@/store/useFinanceStore';
 import { formatCOP, formatMonthLabel } from '@/lib/formatters';
 import {
   totalMonthlyIncome, totalFixedExpenses, totalSubscriptionsCOP,
-  totalDebtPaymentsCOP,
 } from '@/lib/calculations';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Cell } from 'recharts';
 
@@ -50,10 +49,16 @@ export default function TrendsCard() {
     const income = totalMonthlyIncome(incomeSources, exchangeRate);
     const fixedExp = totalFixedExpenses(fixedExpenses, exchangeRate);
     const subsCost = totalSubscriptionsCOP(subscriptions, exchangeRate);
-    const debtPayments = totalDebtPaymentsCOP(debtAccounts, exchangeRate);
+
+    // Current month key (YYYY-MM) — snapshots after this are "future" and should be projected
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Only use snapshots up to and including the current month as historical
+    const pastSnapshots = sortedSnapshots.filter(s => s.month <= currentMonthKey);
 
     // Historical data from snapshots
-    const historical = sortedSnapshots.map(s => {
+    const historical = pastSnapshots.map(s => {
       const label = formatMonthLabel(s.month).split(' ')[0].slice(0, 3);
       return {
         month: label,
@@ -66,11 +71,8 @@ export default function TrendsCard() {
       };
     });
 
-    // Determine current month key (YYYY-MM)
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const lastSnapshotMonth = sortedSnapshots.length > 0
-      ? sortedSnapshots[sortedSnapshots.length - 1].month
+    const lastSnapshotMonth = pastSnapshots.length > 0
+      ? pastSnapshots[pastSnapshots.length - 1].month
       : currentMonthKey;
 
     // Generate projected future months (up to 6 months ahead)
