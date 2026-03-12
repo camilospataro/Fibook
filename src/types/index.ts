@@ -47,6 +47,7 @@ export interface FixedExpense {
   category: 'housing' | 'food' | 'transport' | 'entertainment' | 'health' | 'other';
   linkedAccountId: string | null;
   paymentDay: number;
+  paymentMode: 'auto' | 'manual';
 }
 
 export interface Subscription {

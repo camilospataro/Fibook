@@ -100,6 +100,7 @@ function mapExpense(row: Record<string, unknown>): FixedExpense {
     category: row.category as FixedExpense['category'],
     linkedAccountId: (row.linked_account_id as string) ?? null,
     paymentDay: (row.payment_day as number) ?? 1,
+    paymentMode: (row.payment_mode as 'auto' | 'manual') ?? 'auto',
   };
 }
 
@@ -305,7 +306,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!userId) return;
     const { data } = await supabase.from('fixed_expenses').insert({
       user_id: userId, name: expense.name, amount: expense.amount, currency: expense.currency,
-      category: expense.category, linked_account_id: expense.linkedAccountId ?? null, payment_day: expense.paymentDay ?? 1,
+      category: expense.category, linked_account_id: expense.linkedAccountId ?? null, payment_day: expense.paymentDay ?? 1, payment_mode: expense.paymentMode ?? 'auto',
     }).select().single();
     if (data) set(s => ({ fixedExpenses: [...s.fixedExpenses, mapExpense(data)] }));
   },
@@ -317,6 +318,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.category !== undefined) dbUpdates.category = updates.category;
     if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
     if (updates.paymentDay !== undefined) dbUpdates.payment_day = updates.paymentDay;
+    if (updates.paymentMode !== undefined) dbUpdates.payment_mode = updates.paymentMode;
     await supabase.from('fixed_expenses').update(dbUpdates).eq('id', id);
     set(s => ({ fixedExpenses: s.fixedExpenses.map(e => e.id === id ? { ...e, ...updates } : e) }));
   },
@@ -438,7 +440,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const items: { sourceType: string; sourceId: string; amount: number; currency: string; linkedAccountId: string }[] = [];
 
     for (const exp of fixedExpenses) {
-      if (exp.paymentDay <= today && exp.linkedAccountId) {
+      if (exp.paymentMode === 'auto' && exp.paymentDay <= today && exp.linkedAccountId) {
         const linkedAccount = debtAccounts.find(a => a.id === exp.linkedAccountId);
         if (linkedAccount) {
           items.push({ sourceType: 'expense', sourceId: exp.id, amount: exp.amount, currency: exp.currency, linkedAccountId: exp.linkedAccountId });

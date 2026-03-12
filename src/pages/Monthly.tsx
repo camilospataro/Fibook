@@ -96,7 +96,7 @@ export default function Monthly() {
   const [showAddIncome, setShowAddIncome] = useState(false);
 
   // New item forms
-  const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory, linkedAccountId: null as string | null, paymentDay: 1 });
+  const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory, linkedAccountId: null as string | null, paymentDay: 1, paymentMode: 'auto' as 'auto' | 'manual' });
   const [newSub, setNewSub] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', amount: '', group: 'General', active: true, linkedAccountId: null as string | null, paymentDay: 1 });
   const [newDebt, setNewDebt] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[0], linkedAccountId: null as string | null });
   const [newCheckingAcct, setNewCheckingAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
@@ -158,8 +158,8 @@ export default function Monthly() {
 
   // Handlers
   async function handleAddExpense() {
-    await store.addFixedExpense({ name: newExpense.name, amount: Number(newExpense.amount), currency: newExpense.currency, category: newExpense.category, linkedAccountId: newExpense.linkedAccountId, paymentDay: newExpense.paymentDay ?? 1 });
-    setNewExpense({ name: '', amount: '', currency: 'COP', category: 'other', linkedAccountId: null, paymentDay: 1 });
+    await store.addFixedExpense({ name: newExpense.name, amount: Number(newExpense.amount), currency: newExpense.currency, category: newExpense.category, linkedAccountId: newExpense.paymentMode === 'auto' ? newExpense.linkedAccountId : null, paymentDay: newExpense.paymentDay ?? 1, paymentMode: newExpense.paymentMode });
+    setNewExpense({ name: '', amount: '', currency: 'COP', category: 'other', linkedAccountId: null, paymentDay: 1, paymentMode: 'auto' });
     setShowAddExpense(false);
     toast.success('Fixed expense added');
   }
@@ -463,16 +463,25 @@ export default function Monthly() {
                       <Select value={exp.currency} onValueChange={v => store.updateFixedExpense(exp.id, { currency: v as 'COP' | 'USD' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="COP">COP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select></div>
                     <div><label className="text-[10px] text-muted-foreground">Category</label>
                       <Select value={exp.category} onValueChange={v => store.updateFixedExpense(exp.id, { category: v as ExpenseCategory })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent>{expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></div>
-                    <div><label className="text-[10px] text-muted-foreground">Payment Day</label><Input type="number" min="1" max="31" defaultValue={exp.paymentDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== exp.paymentDay) store.updateFixedExpense(exp.id, { paymentDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
-                    <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Charge To</label>
-                      <Select value={exp.linkedAccountId ?? 'none'} onValueChange={v => store.updateFixedExpense(exp.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent></Select></div>
+                    <div><label className="text-[10px] text-muted-foreground">Payment Type</label>
+                      <Select value={exp.paymentMode} onValueChange={v => store.updateFixedExpense(exp.id, { paymentMode: v as 'auto' | 'manual' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="auto">Automatic</SelectItem><SelectItem value="manual">Manual</SelectItem></SelectContent></Select></div>
+                    {exp.paymentMode === 'auto' && (
+                      <div><label className="text-[10px] text-muted-foreground">Payment Day</label><Input type="number" min="1" max="31" defaultValue={exp.paymentDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== exp.paymentDay) store.updateFixedExpense(exp.id, { paymentDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
+                    )}
+                    {exp.paymentMode === 'auto' && (
+                      <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Charge To</label>
+                        <Select value={exp.linkedAccountId ?? 'none'} onValueChange={v => store.updateFixedExpense(exp.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent></Select></div>
+                    )}
+                    {exp.paymentMode === 'manual' && (
+                      <div className="col-span-2"><p className="text-[10px] text-muted-foreground italic">Track spending manually via the Spending page</p></div>
+                    )}
                   </div>
                 }
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-sm truncate">{exp.name}</span>
                   <Badge variant="secondary" className="text-[10px] shrink-0">{exp.category}</Badge>
-                  <Badge variant="outline" className="text-[10px] shrink-0">{exp.currency}</Badge>
+                  <Badge variant="outline" className="text-[10px] shrink-0">{exp.paymentMode === 'auto' ? `Day ${exp.paymentDay}` : 'Manual'}</Badge>
                 </div>
                 <span className="text-sm font-medium shrink-0">{formatCurrency(exp.amount, exp.currency)}</span>
               </ItemRow>
@@ -652,13 +661,23 @@ export default function Monthly() {
                 <SelectContent>{expenseCategories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Payment Day</Label><Input type="number" min="1" max="31" value={newExpense.paymentDay} onChange={e => setNewExpense(p => ({ ...p, paymentDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) }))} className="bg-secondary border-border" /></div>
-            <div><Label>Charge To</Label>
-              <Select value={newExpense.linkedAccountId ?? 'none'} onValueChange={v => setNewExpense(p => ({ ...p, linkedAccountId: v === 'none' ? null : v }))}>
+            <div><Label>Payment Type</Label>
+              <Select value={newExpense.paymentMode} onValueChange={v => setNewExpense(p => ({ ...p, paymentMode: v as 'auto' | 'manual' }))}>
                 <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="none">None</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="auto">Automatic</SelectItem><SelectItem value="manual">Manual</SelectItem></SelectContent>
               </Select>
             </div>
+            {newExpense.paymentMode === 'auto' && (
+              <>
+                <div><Label>Payment Day</Label><Input type="number" min="1" max="31" value={newExpense.paymentDay} onChange={e => setNewExpense(p => ({ ...p, paymentDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) }))} className="bg-secondary border-border" /></div>
+                <div><Label>Charge To</Label>
+                  <Select value={newExpense.linkedAccountId ?? 'none'} onValueChange={v => setNewExpense(p => ({ ...p, linkedAccountId: v === 'none' ? null : v }))}>
+                    <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="none">None</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter><Button onClick={handleAddExpense} disabled={!newExpense.name || !newExpense.amount}>Add</Button></DialogFooter>
         </DialogContent>
