@@ -19,7 +19,7 @@ export function totalSubscriptionsCOP(subs: Subscription[], exchangeRate: number
     .filter(s => s.active)
     .reduce((sum, s) => {
       const cost = s.currency === 'USD' ? s.amount * exchangeRate : s.amount;
-      return sum + cost;
+      return sum + (s.billingCycle === 'annual' ? cost / 12 : cost);
     }, 0);
 }
 

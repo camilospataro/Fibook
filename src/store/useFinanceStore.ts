@@ -111,6 +111,7 @@ function mapSubscription(row: Record<string, unknown>): Subscription {
     group: (row.group as string) ?? 'General', active: row.active as boolean,
     linkedAccountId: (row.linked_account_id as string) ?? null,
     paymentDay: (row.payment_day as number) ?? 1,
+    billingCycle: (row.billing_cycle as 'monthly' | 'annual') ?? 'monthly',
   };
 }
 
@@ -332,7 +333,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const { userId } = get();
     if (!userId) return;
     const { data } = await supabase.from('subscriptions').insert({
-      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, group: sub.group, active: sub.active, linked_account_id: sub.linkedAccountId ?? null, payment_day: sub.paymentDay ?? 1,
+      user_id: userId, name: sub.name, currency: sub.currency, amount: sub.amount, group: sub.group, active: sub.active, linked_account_id: sub.linkedAccountId ?? null, payment_day: sub.paymentDay ?? 1, billing_cycle: sub.billingCycle ?? 'monthly',
     }).select().single();
     if (data) set(s => ({ subscriptions: [...s.subscriptions, mapSubscription(data)] }));
   },
@@ -345,6 +346,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (updates.active !== undefined) dbUpdates.active = updates.active;
     if (updates.linkedAccountId !== undefined) dbUpdates.linked_account_id = updates.linkedAccountId;
     if (updates.paymentDay !== undefined) dbUpdates.payment_day = updates.paymentDay;
+    if (updates.billingCycle !== undefined) dbUpdates.billing_cycle = updates.billingCycle;
     await supabase.from('subscriptions').update(dbUpdates).eq('id', id);
     set(s => ({ subscriptions: s.subscriptions.map(sub => sub.id === id ? { ...sub, ...updates } : sub) }));
   },

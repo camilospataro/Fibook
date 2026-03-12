@@ -101,7 +101,7 @@ export default function Monthly() {
 
   // New item forms
   const [newExpense, setNewExpense] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', category: 'other' as ExpenseCategory, linkedAccountId: null as string | null, paymentDay: 1, paymentMode: 'manual' as 'auto' | 'manual' });
-  const [newSub, setNewSub] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', amount: '', group: 'General', active: true, linkedAccountId: null as string | null, paymentDay: 1 });
+  const [newSub, setNewSub] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', amount: '', group: 'General', active: true, linkedAccountId: null as string | null, paymentDay: 1, billingCycle: 'monthly' as 'monthly' | 'annual' });
   const [newDebt, setNewDebt] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', minimumMonthlyPayment: '', color: DEBT_COLORS[0], linkedAccountId: null as string | null });
   const [newCheckingAcct, setNewCheckingAcct] = useState({ name: '', currency: 'COP' as 'COP' | 'USD', currentBalance: '', color: CHECKING_COLORS[0] });
   const [newIncome, setNewIncome] = useState({ name: '', amount: '', currency: 'COP' as 'COP' | 'USD', isRecurring: true, linkedAccountId: null as string | null, depositDay: 1 });
@@ -168,8 +168,8 @@ export default function Monthly() {
     toast.success('Fixed expense added');
   }
   async function handleAddSub() {
-    await store.addSubscription({ name: newSub.name, currency: newSub.currency, amount: Number(newSub.amount), group: newSub.group || 'General', active: newSub.active, linkedAccountId: newSub.linkedAccountId, paymentDay: newSub.paymentDay ?? 1 });
-    setNewSub({ name: '', currency: 'COP', amount: '', group: 'General', active: true, linkedAccountId: null, paymentDay: 1 });
+    await store.addSubscription({ name: newSub.name, currency: newSub.currency, amount: Number(newSub.amount), group: newSub.group || 'General', active: newSub.active, linkedAccountId: newSub.linkedAccountId, paymentDay: newSub.paymentDay ?? 1, billingCycle: newSub.billingCycle });
+    setNewSub({ name: '', currency: 'COP', amount: '', group: 'General', active: true, linkedAccountId: null, paymentDay: 1, billingCycle: 'monthly' });
     setShowAddSub(false);
     toast.success('Subscription added');
   }
@@ -512,7 +512,10 @@ export default function Monthly() {
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{groupName}</span>
                   <div className="flex-1 h-px bg-border/50" />
                   <span className="text-[11px] text-muted-foreground">
-                    {formatCOP(groupSubs.filter(s => s.active).reduce((sum, s) => sum + (s.currency === 'USD' ? s.amount * exchangeRate : s.amount), 0))}
+                    {formatCOP(groupSubs.filter(s => s.active).reduce((sum, s) => {
+                      const cost = s.currency === 'USD' ? s.amount * exchangeRate : s.amount;
+                      return sum + (s.billingCycle === 'annual' ? cost / 12 : cost);
+                    }, 0))}/mo
                   </span>
                 </div>
                 {groupSubs.map(sub => (
@@ -534,6 +537,8 @@ export default function Monthly() {
                               <Input defaultValue={sub.group} onBlur={e => { const v = e.target.value.trim() || 'General'; if (v !== sub.group) store.updateSubscription(sub.id, { group: v }); }} placeholder="Group name" className="h-7 text-xs bg-secondary border-border flex-1" />
                             )}
                           </div></div>
+                        <div><label className="text-[10px] text-muted-foreground">Billing</label>
+                          <Select value={sub.billingCycle} onValueChange={v => store.updateSubscription(sub.id, { billingCycle: v as 'monthly' | 'annual' })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="annual">Annual</SelectItem></SelectContent></Select></div>
                         <div><label className="text-[10px] text-muted-foreground">Payment Day</label><Input type="number" min="1" max="31" defaultValue={sub.paymentDay} onBlur={e => { const v = Math.min(31, Math.max(1, Number(e.target.value) || 1)); if (v !== sub.paymentDay) store.updateSubscription(sub.id, { paymentDay: v }); }} className="h-7 text-xs bg-secondary border-border" /></div>
                         <div className="col-span-2"><label className="text-[10px] text-muted-foreground">Charge To</label>
                           <Select value={sub.linkedAccountId ?? 'none'} onValueChange={v => store.updateSubscription(sub.id, { linkedAccountId: v === 'none' ? null : v })}><SelectTrigger className="h-7 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}{checkingAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent></Select></div>
@@ -548,10 +553,16 @@ export default function Monthly() {
                       />
                       <span className={`text-sm truncate ${!sub.active ? 'text-muted-foreground line-through' : ''}`}>{sub.name}</span>
                       <Badge variant="secondary" className="text-[10px] shrink-0">{sub.currency}</Badge>
+                      {sub.billingCycle === 'annual' && <Badge variant="outline" className="text-[10px] shrink-0">Annual</Badge>}
                     </div>
-                    <span className={`text-sm font-medium shrink-0 ${!sub.active ? 'text-muted-foreground' : ''}`}>
-                      {formatCurrency(sub.amount, sub.currency)}
-                    </span>
+                    <div className="text-right shrink-0">
+                      <span className={`text-sm font-medium ${!sub.active ? 'text-muted-foreground' : ''}`}>
+                        {formatCurrency(sub.amount, sub.currency)}{sub.billingCycle === 'annual' ? '/yr' : ''}
+                      </span>
+                      {sub.billingCycle === 'annual' && (
+                        <p className="text-[10px] text-muted-foreground">~{formatCOP((sub.currency === 'USD' ? sub.amount * exchangeRate : sub.amount) / 12)}/mo</p>
+                      )}
+                    </div>
                   </ItemRow>
                 ))}
               </div>
@@ -742,6 +753,12 @@ export default function Monthly() {
               </Select>
             </div>
             <div><Label>Amount ({newSub.currency})</Label><Input type="number" value={newSub.amount} onChange={e => setNewSub(p => ({ ...p, amount: e.target.value }))} className="bg-secondary border-border" /></div>
+            <div><Label>Billing Cycle</Label>
+              <Select value={newSub.billingCycle} onValueChange={v => setNewSub(p => ({ ...p, billingCycle: v as 'monthly' | 'annual' }))}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="annual">Annual</SelectItem></SelectContent>
+              </Select>
+            </div>
             <div><Label>Payment Day</Label><Input type="number" min="1" max="31" value={newSub.paymentDay} onChange={e => setNewSub(p => ({ ...p, paymentDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) }))} className="bg-secondary border-border" /></div>
             <div><Label>Charge To</Label>
               <Select value={newSub.linkedAccountId ?? 'none'} onValueChange={v => setNewSub(p => ({ ...p, linkedAccountId: v === 'none' ? null : v }))}>

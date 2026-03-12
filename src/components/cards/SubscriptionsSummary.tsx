@@ -31,7 +31,10 @@ export default function SubscriptionsSummary() {
         <p className="text-lg font-bold text-warning mb-3">{formatCOP(total)}<span className="text-xs text-muted-foreground font-normal">/mo</span></p>
         <div className="space-y-3">
           {grouped.map(([groupName, groupSubs]) => {
-            const groupTotal = groupSubs.reduce((sum, s) => sum + (s.currency === 'USD' ? s.amount * exchangeRate : s.amount), 0);
+            const groupTotal = groupSubs.reduce((sum, s) => {
+              const cost = s.currency === 'USD' ? s.amount * exchangeRate : s.amount;
+              return sum + (s.billingCycle === 'annual' ? cost / 12 : cost);
+            }, 0);
             return (
               <div key={groupName}>
                 <div className="flex items-center justify-between mb-1">
@@ -41,11 +44,14 @@ export default function SubscriptionsSummary() {
                 <div className="space-y-1.5 pl-2 border-l-2 border-border/50">
                   {groupSubs.map(sub => (
                     <div key={sub.id} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{sub.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">{sub.name}</span>
+                        {sub.billingCycle === 'annual' && <span className="text-[9px] text-muted-foreground/70 uppercase">yr</span>}
+                      </div>
                       <div className="text-right">
-                        <span>{formatCurrency(sub.amount, sub.currency)}</span>
-                        {sub.currency === 'USD' && (
-                          <p className="text-[10px] text-muted-foreground">~{formatCOP(sub.amount * exchangeRate)}</p>
+                        <span>{formatCurrency(sub.amount, sub.currency)}{sub.billingCycle === 'annual' ? '/yr' : ''}</span>
+                        {(sub.currency === 'USD' || sub.billingCycle === 'annual') && (
+                          <p className="text-[10px] text-muted-foreground">~{formatCOP((sub.currency === 'USD' ? sub.amount * exchangeRate : sub.amount) / (sub.billingCycle === 'annual' ? 12 : 1))}/mo</p>
                         )}
                       </div>
                     </div>

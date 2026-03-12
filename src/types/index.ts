@@ -60,6 +60,7 @@ export interface Subscription {
   active: boolean;
   linkedAccountId: string | null;
   paymentDay: number;
+  billingCycle: 'monthly' | 'annual';
 }
 
 export interface SpendingEntry {
