@@ -138,13 +138,13 @@ export default function Monthly() {
     return sum + (acc.currency === 'USD' ? bal * exchangeRate : bal);
   }, 0);
   const totalSpending = monthlySpending.reduce((sum, e) => sum + e.amount, 0);
-  const totalExpenses = fixed + subsCost + debtMin + totalSpending;
-  const savingsVal = Number(savingsAmount) || 0;
-  const balance = totalIncome - totalExpenses - savingsVal;
   const debtPaid = accounts.reduce((sum, acc) => {
     const paid = Number(ccPayments[acc.id]) || 0;
     return sum + (acc.currency === 'USD' ? paid * exchangeRate : paid);
   }, 0);
+  const totalExpenses = fixed + subsCost + debtPaid + totalSpending;
+  const savingsVal = Number(savingsAmount) || 0;
+  const balance = totalIncome - totalExpenses - savingsVal;
   const totalChecking = checkingAccounts.reduce((sum, acc) =>
     sum + (acc.currency === 'USD' ? acc.currentBalance * exchangeRate : acc.currentBalance), 0);
 
@@ -602,7 +602,7 @@ export default function Monthly() {
               <SummaryRow label="Fixed Expenses" value={formatCOP(fixed)} />
               <SummaryRow label="Subscriptions" value={formatCOP(subsCost)} />
               <SummaryRow label="Variable Spending" value={formatCOP(totalSpending)} />
-              <SummaryRow label="Debt Min. Payments" value={formatCOP(debtMin)} />
+              <SummaryRow label="Debt Payments" value={formatCOP(debtPaid)} />
               <SummaryRow label="Savings Goal" value={formatCOP(Number(savingsAmount) || 0)} color="text-primary" />
               <SummaryRow label="Total Checking" value={formatCOP(totalChecking)} color="text-primary" />
               <Separator />
