@@ -162,6 +162,17 @@ export default function Monthly() {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
 
+  // Section-level drag-and-drop order (persisted in localStorage)
+  const [sectionDragMode, setSectionDragMode] = useState(false);
+  const [balSectionOrder, setBalSectionOrder] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('balSectionOrder'); return s ? JSON.parse(s) : ['checking', 'debt', 'overview']; } catch { return ['checking', 'debt', 'overview']; }
+  });
+  const [movSectionOrder, setMovSectionOrder] = useState<string[]>(() => {
+    try { const s = localStorage.getItem('movSectionOrder'); return s ? JSON.parse(s) : ['income', 'expenses', 'subscriptions', 'debtPayments', 'spending']; } catch { return ['income', 'expenses', 'subscriptions', 'debtPayments', 'spending']; }
+  });
+  useEffect(() => { localStorage.setItem('balSectionOrder', JSON.stringify(balSectionOrder)); }, [balSectionOrder]);
+  useEffect(() => { localStorage.setItem('movSectionOrder', JSON.stringify(movSectionOrder)); }, [movSectionOrder]);
+
   function makeDragEndHandler(setter: React.Dispatch<React.SetStateAction<string[]>>) {
     return ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) => {
       if (over && active.id !== over.id) {
@@ -510,6 +521,7 @@ export default function Monthly() {
       {/* Tab Toggle */}
       <div className="flex items-center gap-2">
         <div className="flex rounded-lg bg-secondary/50 p-1 gap-1 flex-1">
+
           <button
             onClick={() => { setActiveTab('balances'); setExpandedId(null); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
@@ -533,13 +545,22 @@ export default function Monthly() {
             Movements
           </button>
         </div>
+        <button
+          onClick={() => setSectionDragMode(p => !p)}
+          className={`p-2 rounded-lg border text-xs font-medium transition-colors shrink-0 ${sectionDragMode ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary border-border text-muted-foreground hover:text-foreground'}`}
+          title="Reorder sections"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
       </div>
 
       {/* ==================== BALANCES TAB ==================== */}
-      {activeTab === 'balances' && (
+      {activeTab === 'balances' && (<>
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setBalSectionOrder)}>
+        <SortableContext items={balSectionOrder} strategy={verticalListSortingStrategy}>
         <div className="space-y-4">
-          {/* Checking Accounts */}
-          <SectionCard
+          {balSectionOrder.map(skey => (<SortableSection key={skey} id={skey} dragMode={sectionDragMode}><>
+          {skey === 'checking' && <SectionCard
             icon={Landmark}
             title="Checking Accounts"
             subtitle={formatCOP(totalChecking)}
@@ -633,10 +654,8 @@ export default function Monthly() {
                 )}
               </div>
             )}
-          </SectionCard>
-
-          {/* Debt Balances */}
-          <SectionCard
+          </SectionCard>}
+          {skey === 'debt' && <SectionCard
             icon={CreditCard}
             title="Debt Balances"
             subtitle={formatCOP(totalDebt)}
@@ -674,10 +693,8 @@ export default function Monthly() {
             ))}
             </SortableContext>
             </DndContext>
-          </SectionCard>
-
-          {/* Net Worth Summary */}
-          <Card className="bg-card border-primary/20 border">
+          </SectionCard>}
+          {skey === 'overview' && <Card className="bg-card border-primary/20 border">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Balance Overview</CardTitle>
             </CardHeader>
@@ -693,15 +710,20 @@ export default function Monthly() {
                 </span>
               </div>
             </CardContent>
-          </Card>
+          </Card>}
+          </></SortableSection>))}
         </div>
-      )}
+        </SortableContext>
+        </DndContext>
+      </>)}
 
       {/* ==================== MOVEMENTS TAB ==================== */}
-      {activeTab === 'movements' && (
+      {activeTab === 'movements' && (<>
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setMovSectionOrder)}>
+        <SortableContext items={movSectionOrder} strategy={verticalListSortingStrategy}>
         <div className="space-y-4">
-          {/* Income */}
-          <SectionCard
+          {movSectionOrder.map(skey => (<SortableSection key={skey} id={skey} dragMode={sectionDragMode}><>
+          {skey === 'income' && <SectionCard
             icon={DollarSign}
             title="Income"
             subtitle={formatCOP(totalIncome)}
@@ -753,10 +775,8 @@ export default function Monthly() {
                 <Input type="number" value={sideIncome} onChange={e => setSideIncome(e.target.value)} className="h-7 text-xs bg-secondary border-border w-full" placeholder="Side income amount" />
               </div>
             )}
-          </SectionCard>
-
-          {/* Fixed Expenses */}
-          <SectionCard
+          </SectionCard>}
+          {skey === 'expenses' && <SectionCard
             icon={Receipt}
             title="Fixed Expenses"
             subtitle={formatCOP(fixed)}
@@ -807,10 +827,8 @@ export default function Monthly() {
             ))}
             </SortableContext>
             </DndContext>
-          </SectionCard>
-
-          {/* Subscriptions */}
-          <SectionCard
+          </SectionCard>}
+          {skey === 'subscriptions' && <SectionCard
             icon={Repeat}
             title="Subscriptions"
             subtitle={formatCOP(subsCost)}
@@ -911,10 +929,8 @@ export default function Monthly() {
             ))}
             </SortableContext>
             </DndContext>
-          </SectionCard>
-
-          {/* Debt Payments */}
-          <SectionCard
+          </SectionCard>}
+          {skey === 'debtPayments' && <SectionCard
             icon={CreditCard}
             title="Debt Payments"
             subtitle={formatCOP(debtPaid)}
@@ -997,10 +1013,8 @@ export default function Monthly() {
               </ItemRow>
               );
             })}
-          </SectionCard>
-
-          {/* Monthly Spending Transactions */}
-          <SectionCard
+          </SectionCard>}
+          {skey === 'spending' && <SectionCard
             icon={ShoppingBag}
             title="Spending"
             subtitle={formatCOP(totalSpending)}
@@ -1023,8 +1037,12 @@ export default function Monthly() {
                 </div>
               </div>
             ))}
-          </SectionCard>
-
+          </SectionCard>}
+          </></SortableSection>))}
+        </div>
+        </SortableContext>
+        </DndContext>
+        <div className="space-y-4 mt-4">
           {/* CC Charges */}
           <Card className="bg-card border-border">
             <CardHeader className="pb-2">
@@ -1064,7 +1082,7 @@ export default function Monthly() {
             </CardContent>
           </Card>
         </div>
-      )}
+      </>)}
 
       <Button onClick={() => setShowRecap(true)} variant="secondary" className="w-full" size="lg">
         View Month Recap
@@ -1365,6 +1383,27 @@ function SortableItemRow({ id, editing, ...props }: { id: string; editing: boole
   );
 }
 
+
+function SortableSection({ id, dragMode, children }: { id: string; dragMode: boolean; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !dragMode });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      {dragMode && (
+        <button
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          onClick={e => e.stopPropagation()}
+          className="absolute top-3 right-3 z-20 p-1.5 rounded-md bg-secondary/80 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none shadow-sm"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      )}
+      {children}
+    </div>
+  );
+}
 
 function EmptyState({ text }: { text: string }) {
   return <p className="text-xs text-muted-foreground py-2 text-center">{text}</p>;
