@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles, Landmark, ShoppingBag } from 'lucide-react';
+import { Plus, Trash2, Pencil, Receipt, CreditCard, Repeat, DollarSign, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles, Landmark, ShoppingBag, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import AiUpdateSheet from '@/components/modals/AiUpdateSheet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -131,6 +134,46 @@ export default function Monthly() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const toggleExpand = (id: string) => setExpandedId(prev => prev === id ? null : id);
 
+  // Drag-and-drop order state (session only, resets on store change if item added/removed)
+  const syncOrder = (prev: string[], ids: string[]) => {
+    const existing = prev.filter(id => ids.includes(id));
+    const newIds = ids.filter(id => !prev.includes(id));
+    return [...existing, ...newIds];
+  };
+  const [checkingOrder, setCheckingOrder] = useState<string[]>(() => checkingAccounts.map(a => a.id));
+  const [debtOrder, setDebtOrder] = useState<string[]>(() => accounts.map(a => a.id));
+  const [incomeOrder, setIncomeOrder] = useState<string[]>(() => incomeSources.map(a => a.id));
+  const [expensesOrder, setExpensesOrder] = useState<string[]>(() => fixedExpenses.map(a => a.id));
+  const [subsOrder, setSubsOrder] = useState<string[]>(() => subs.map(a => a.id));
+  useEffect(() => setCheckingOrder(p => syncOrder(p, checkingAccounts.map(a => a.id))), [checkingAccounts]);
+  useEffect(() => setDebtOrder(p => syncOrder(p, accounts.map(a => a.id))), [accounts]);
+  useEffect(() => setIncomeOrder(p => syncOrder(p, incomeSources.map(a => a.id))), [incomeSources]);
+  useEffect(() => setExpensesOrder(p => syncOrder(p, fixedExpenses.map(a => a.id))), [fixedExpenses]);
+  useEffect(() => setSubsOrder(p => syncOrder(p, subs.map(a => a.id))), [subs]);
+
+  const sortedChecking = useMemo(() => checkingOrder.map(id => checkingAccounts.find(a => a.id === id)).filter(Boolean) as typeof checkingAccounts, [checkingOrder, checkingAccounts]);
+  const sortedDebt = useMemo(() => debtOrder.map(id => accounts.find(a => a.id === id)).filter(Boolean) as typeof accounts, [debtOrder, accounts]);
+  const sortedIncome = useMemo(() => incomeOrder.map(id => incomeSources.find(a => a.id === id)).filter(Boolean) as typeof incomeSources, [incomeOrder, incomeSources]);
+  const sortedExpenses = useMemo(() => expensesOrder.map(id => fixedExpenses.find(a => a.id === id)).filter(Boolean) as typeof fixedExpenses, [expensesOrder, fixedExpenses]);
+  const sortedSubs = useMemo(() => subsOrder.map(id => subs.find(a => a.id === id)).filter(Boolean) as typeof subs, [subsOrder, subs]);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
+
+  function makeDragEndHandler(setter: React.Dispatch<React.SetStateAction<string[]>>) {
+    return ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) => {
+      if (over && active.id !== over.id) {
+        setter(prev => {
+          const oldIndex = prev.indexOf(String(active.id));
+          const newIndex = prev.indexOf(String(over.id));
+          return arrayMove(prev, oldIndex, newIndex);
+        });
+      }
+    };
+  }
+
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null);
   const [confirmTransfer, setConfirmTransfer] = useState(false);
@@ -143,7 +186,7 @@ export default function Monthly() {
   const [showRecap, setShowRecap] = useState(false);
 
   // Subscription groups
-  const filteredSubs = useMemo(() => subs.filter(s => subView === 'annual' ? s.billingCycle === 'annual' : s.billingCycle !== 'annual'), [subs, subView]);
+  const filteredSubs = useMemo(() => sortedSubs.filter(s => subView === 'annual' ? s.billingCycle === 'annual' : s.billingCycle !== 'annual'), [sortedSubs, subView]);
   const subGroups = useMemo(() => {
     const groups = new Map<string, typeof subs>();
     for (const sub of filteredSubs) {
@@ -508,8 +551,11 @@ export default function Monthly() {
             onAdd={!isReadOnly && isEditing('checking') ? () => setShowAddChecking(true) : undefined}
           >
             {checkingAccounts.length === 0 && <EmptyState text="No checking accounts yet" />}
-            {checkingAccounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('checking') ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setCheckingOrder)}>
+            <SortableContext items={checkingOrder} strategy={verticalListSortingStrategy}>
+            {sortedChecking.map(acc => (
+              <SortableItemRow key={acc.id} id={acc.id} editing={!isReadOnly && isEditing('checking')}
+                onDelete={!isReadOnly && isEditing('checking') ? () => setDeleteConfirm({ type: 'checking', id: acc.id, name: acc.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('checking') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -528,8 +574,10 @@ export default function Monthly() {
                   <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
                 </div>
                 <span className="text-sm font-medium shrink-0">{formatCurrency(effectiveCheckingBalances[acc.id] ?? acc.currentBalance, acc.currency)}</span>
-              </ItemRow>
+              </SortableItemRow>
             ))}
+            </SortableContext>
+            </DndContext>
             <Separator className="my-2" />
             <div className={`flex items-center justify-between py-1 ${!isReadOnly && isEditing('checking') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
               onClick={!isReadOnly && isEditing('checking') ? () => toggleExpand('savings-transfer') : undefined}>
@@ -599,8 +647,11 @@ export default function Monthly() {
             onAdd={!isReadOnly && isEditing('debt') ? () => setShowAddDebt(true) : undefined}
           >
             {accounts.length === 0 && <EmptyState text="No debt accounts" />}
-            {accounts.map(acc => (
-              <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('debt') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setDebtOrder)}>
+            <SortableContext items={debtOrder} strategy={verticalListSortingStrategy}>
+            {sortedDebt.map(acc => (
+              <SortableItemRow key={acc.id} id={acc.id} editing={!isReadOnly && isEditing('debt')}
+                onDelete={!isReadOnly && isEditing('debt') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('debt') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -619,8 +670,10 @@ export default function Monthly() {
                   <Badge variant="outline" className="text-[10px] shrink-0">{acc.currency}</Badge>
                 </div>
                 <span className="text-sm font-medium shrink-0">{formatCurrency(effectiveDebtBalances[acc.id] ?? acc.currentBalance, acc.currency)}</span>
-              </ItemRow>
+              </SortableItemRow>
             ))}
+            </SortableContext>
+            </DndContext>
           </SectionCard>
 
           {/* Net Worth Summary */}
@@ -660,8 +713,11 @@ export default function Monthly() {
             onAdd={!isReadOnly && isEditing('income') ? () => setShowAddIncome(true) : undefined}
           >
             {incomeSources.length === 0 && <EmptyState text="No income sources" />}
-            {incomeSources.map(src => (
-              <ItemRow key={src.id} onDelete={!isReadOnly && isEditing('income') ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setIncomeOrder)}>
+            <SortableContext items={incomeOrder} strategy={verticalListSortingStrategy}>
+            {sortedIncome.map(src => (
+              <SortableItemRow key={src.id} id={src.id} editing={!isReadOnly && isEditing('income')}
+                onDelete={!isReadOnly && isEditing('income') ? () => setDeleteConfirm({ type: 'income', id: src.id, name: src.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('income') ? () => toggleExpand(src.id) : undefined} expanded={expandedId === src.id}
                 editContent={
                   <div className="pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -682,8 +738,10 @@ export default function Monthly() {
                   <Badge variant="outline" className="text-[10px]">{src.currency}</Badge>
                 </div>
                 <span className="text-sm font-medium shrink-0">{formatCurrency(src.amount, src.currency)}</span>
-              </ItemRow>
+              </SortableItemRow>
             ))}
+            </SortableContext>
+            </DndContext>
             <Separator className="my-2" />
             <div className={`flex items-center justify-between py-1 ${!isReadOnly && isEditing('income') ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded' : ''}`}
               onClick={!isReadOnly && isEditing('income') ? () => toggleExpand('side-income') : undefined}>
@@ -710,8 +768,11 @@ export default function Monthly() {
             onAdd={!isReadOnly && isEditing('expenses') ? () => setShowAddExpense(true) : undefined}
           >
             {fixedExpenses.length === 0 && <EmptyState text="No fixed expenses yet" />}
-            {fixedExpenses.map(exp => (
-              <ItemRow key={exp.id} onDelete={!isReadOnly && isEditing('expenses') ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setExpensesOrder)}>
+            <SortableContext items={expensesOrder} strategy={verticalListSortingStrategy}>
+            {sortedExpenses.map(exp => (
+              <SortableItemRow key={exp.id} id={exp.id} editing={!isReadOnly && isEditing('expenses')}
+                onDelete={!isReadOnly && isEditing('expenses') ? () => setDeleteConfirm({ type: 'expense', id: exp.id, name: exp.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('expenses') ? () => toggleExpand(exp.id) : undefined} expanded={expandedId === exp.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -742,8 +803,10 @@ export default function Monthly() {
                   <Badge variant="outline" className="text-[10px] shrink-0">{exp.paymentMode === 'auto' ? `Day ${exp.paymentDay}` : 'Manual'}</Badge>
                 </div>
                 <span className="text-sm font-medium shrink-0">{formatCurrency(exp.amount, exp.currency)}</span>
-              </ItemRow>
+              </SortableItemRow>
             ))}
+            </SortableContext>
+            </DndContext>
           </SectionCard>
 
           {/* Subscriptions */}
@@ -778,6 +841,8 @@ export default function Monthly() {
               </button>
             </div>
             {filteredSubs.length === 0 && <EmptyState text={`No ${subView} subscriptions yet`} />}
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setSubsOrder)}>
+            <SortableContext items={subsOrder} strategy={verticalListSortingStrategy}>
             {subGroups.map(([groupName, groupSubs]) => (
               <div key={groupName}>
                 <div className="flex items-center gap-2 mt-2 mb-1 first:mt-0">
@@ -791,7 +856,8 @@ export default function Monthly() {
                   </span>
                 </div>
                 {groupSubs.map(sub => (
-                  <ItemRow key={sub.id} onDelete={!isReadOnly && isEditing('subscriptions') ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
+                  <SortableItemRow key={sub.id} id={sub.id} editing={!isReadOnly && isEditing('subscriptions')}
+                    onDelete={!isReadOnly && isEditing('subscriptions') ? () => setDeleteConfirm({ type: 'sub', id: sub.id, name: sub.name }) : undefined}
                     onEdit={!isReadOnly && isEditing('subscriptions') ? () => toggleExpand(sub.id) : undefined} expanded={expandedId === sub.id}
                     editContent={
                       <div className="pb-3 pt-1 pl-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -839,10 +905,12 @@ export default function Monthly() {
                         <p className="text-[10px] text-muted-foreground">~{formatCOP((sub.currency === 'USD' ? sub.amount * exchangeRate : sub.amount) / 12)}/mo</p>
                       )}
                     </div>
-                  </ItemRow>
+                  </SortableItemRow>
                 ))}
               </div>
             ))}
+            </SortableContext>
+            </DndContext>
           </SectionCard>
 
           {/* Debt Payments */}
@@ -1246,11 +1314,12 @@ function SectionCard({ icon: Icon, title, subtitle, subtitleColor, open, onToggl
   );
 }
 
-function ItemRow({ onDelete, onEdit, expanded, editContent, children }: {
+function ItemRow({ onDelete, onEdit, expanded, editContent, dragHandle, children }: {
   onDelete?: () => void;
   onEdit?: () => void;
   expanded?: boolean;
   editContent?: React.ReactNode;
+  dragHandle?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -1259,6 +1328,7 @@ function ItemRow({ onDelete, onEdit, expanded, editContent, children }: {
         className={`flex items-center justify-between py-2 gap-2 ${onEdit ? 'cursor-pointer hover:bg-secondary/30 -mx-2 px-2 rounded transition-colors' : ''}`}
         onClick={onEdit}
       >
+        {dragHandle}
         <div className="flex items-center justify-between gap-2 flex-1 min-w-0">{children}</div>
         {onDelete && (
           <div className="flex items-center gap-1 shrink-0">
@@ -1269,6 +1339,28 @@ function ItemRow({ onDelete, onEdit, expanded, editContent, children }: {
         )}
       </div>
       {expanded && editContent}
+    </div>
+  );
+}
+
+function SortableItemRow({ id, editing, ...props }: { id: string; editing: boolean } & React.ComponentProps<typeof ItemRow>) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 50 : undefined };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <ItemRow
+        {...props}
+        dragHandle={editing ? (
+          <button
+            {...attributes}
+            {...listeners}
+            onClick={e => e.stopPropagation()}
+            className="p-1 text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none shrink-0"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+        ) : undefined}
+      />
     </div>
   );
 }
