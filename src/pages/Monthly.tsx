@@ -948,12 +948,15 @@ export default function Monthly() {
                 <span className="text-[10px] text-muted-foreground">Paid: {formatCOP(debtPaid)}</span>
               </div>
             )}
-            {accounts.map(acc => {
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={makeDragEndHandler(setDebtOrder)}>
+            <SortableContext items={debtOrder} strategy={verticalListSortingStrategy}>
+            {sortedDebt.map(acc => {
               const linkedChecking = acc.linkedAccountId ? checkingAccounts.find(a => a.id === acc.linkedAccountId) : null;
               const isConfirming = confirmDebtPay === acc.id;
               const payAmount = Number(debtPayAmounts[acc.id] ?? (acc.monthlyPayment || 0));
               return (
-              <ItemRow key={acc.id} onDelete={!isReadOnly && isEditing('debtPayments') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
+              <SortableItemRow key={acc.id} id={acc.id} editing={!isReadOnly && isEditing('debtPayments')}
+                onDelete={!isReadOnly && isEditing('debtPayments') ? () => setDeleteConfirm({ type: 'debt', id: acc.id, name: acc.name }) : undefined}
                 onEdit={!isReadOnly && isEditing('debtPayments') ? () => toggleExpand(acc.id) : undefined} expanded={expandedId === acc.id}
                 editContent={
                   <div className="pb-3 pt-1 pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1010,9 +1013,11 @@ export default function Monthly() {
                 ) : (
                   <span className="text-sm font-medium shrink-0">{formatCurrency(effectiveDebtPayments[acc.id] ?? (acc.monthlyPayment || 0), acc.currency)}</span>
                 )}
-              </ItemRow>
+              </SortableItemRow>
               );
             })}
+            </SortableContext>
+            </DndContext>
           </SectionCard>}
           {skey === 'spending' && <SectionCard
             icon={ShoppingBag}
