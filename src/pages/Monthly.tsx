@@ -140,16 +140,22 @@ export default function Monthly() {
     const newIds = ids.filter(id => !prev.includes(id));
     return [...existing, ...newIds];
   };
-  const [checkingOrder, setCheckingOrder] = useState<string[]>(() => checkingAccounts.map(a => a.id));
-  const [debtOrder, setDebtOrder] = useState<string[]>(() => accounts.map(a => a.id));
-  const [incomeOrder, setIncomeOrder] = useState<string[]>(() => incomeSources.map(a => a.id));
-  const [expensesOrder, setExpensesOrder] = useState<string[]>(() => fixedExpenses.map(a => a.id));
-  const [subsOrder, setSubsOrder] = useState<string[]>(() => subs.map(a => a.id));
+  const lsGet = (key: string, fallback: string[]) => { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) as string[] : fallback; } catch { return fallback; } };
+  const [checkingOrder, setCheckingOrder] = useState<string[]>(() => lsGet('itemOrder_checking', checkingAccounts.map(a => a.id)));
+  const [debtOrder, setDebtOrder] = useState<string[]>(() => lsGet('itemOrder_debt', accounts.map(a => a.id)));
+  const [incomeOrder, setIncomeOrder] = useState<string[]>(() => lsGet('itemOrder_income', incomeSources.map(a => a.id)));
+  const [expensesOrder, setExpensesOrder] = useState<string[]>(() => lsGet('itemOrder_expenses', fixedExpenses.map(a => a.id)));
+  const [subsOrder, setSubsOrder] = useState<string[]>(() => lsGet('itemOrder_subs', subs.map(a => a.id)));
   useEffect(() => setCheckingOrder(p => syncOrder(p, checkingAccounts.map(a => a.id))), [checkingAccounts]);
   useEffect(() => setDebtOrder(p => syncOrder(p, accounts.map(a => a.id))), [accounts]);
   useEffect(() => setIncomeOrder(p => syncOrder(p, incomeSources.map(a => a.id))), [incomeSources]);
   useEffect(() => setExpensesOrder(p => syncOrder(p, fixedExpenses.map(a => a.id))), [fixedExpenses]);
   useEffect(() => setSubsOrder(p => syncOrder(p, subs.map(a => a.id))), [subs]);
+  useEffect(() => { localStorage.setItem('itemOrder_checking', JSON.stringify(checkingOrder)); }, [checkingOrder]);
+  useEffect(() => { localStorage.setItem('itemOrder_debt', JSON.stringify(debtOrder)); }, [debtOrder]);
+  useEffect(() => { localStorage.setItem('itemOrder_income', JSON.stringify(incomeOrder)); }, [incomeOrder]);
+  useEffect(() => { localStorage.setItem('itemOrder_expenses', JSON.stringify(expensesOrder)); }, [expensesOrder]);
+  useEffect(() => { localStorage.setItem('itemOrder_subs', JSON.stringify(subsOrder)); }, [subsOrder]);
 
   const sortedChecking = useMemo(() => checkingOrder.map(id => checkingAccounts.find(a => a.id === id)).filter(Boolean) as typeof checkingAccounts, [checkingOrder, checkingAccounts]);
   const sortedDebt = useMemo(() => debtOrder.map(id => accounts.find(a => a.id === id)).filter(Boolean) as typeof accounts, [debtOrder, accounts]);
